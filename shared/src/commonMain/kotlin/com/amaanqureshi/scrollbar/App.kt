@@ -18,7 +18,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,8 +26,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -45,6 +44,7 @@ import io.github.amaanprobably.scrollbar.ScrollbarLabel
 import io.github.amaanprobably.scrollbar.ScrollbarVisibility
 import io.github.amaanprobably.scrollbar.scrollbar
 import kotlinx.coroutines.delay
+import kotlin.time.Duration.Companion.milliseconds
 
 private enum class Demo(val title: String) { Column("Column"), Grid("Grid"), Row("Row"), Feed("Feed") }
 
@@ -274,7 +274,7 @@ private fun FeedDemo(
         snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
             .collect { lastVisible ->
                 if (lastVisible != null && lastVisible >= loadedCount - 5 && loadedCount < FEED_TOTAL) {
-                    delay(600)
+                    delay(600.milliseconds)
                     loadedCount += FEED_PAGE_SIZE
                 }
             }

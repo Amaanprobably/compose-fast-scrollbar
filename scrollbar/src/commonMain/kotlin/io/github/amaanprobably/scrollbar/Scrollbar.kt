@@ -357,7 +357,7 @@ fun Modifier.scrollbar(
 
 // Targets: what the scrollbar needs from a lazy layout, so lists and grids share one code path.
 
-private interface ScrollbarTarget {
+internal interface ScrollbarTarget {
     val state: ScrollableState
     val isVertical: Boolean
     val isReversed: Boolean
@@ -422,11 +422,11 @@ private fun ScrollableState.pinnedProgress(offset: Float, maxScroll: Float): Flo
 }
 
 /** Progress is logical (0 = start of the list). Mirrored layouts show it flipped on screen. */
-private fun visualProgress(progress: Float, isMirrored: Boolean): Float =
+internal fun visualProgress(progress: Float, isMirrored: Boolean): Float =
     if (isMirrored) 1f - progress else progress
 
 /** Mutable and reusable. Snapshot taken at grab time and used for the whole drag. */
-private class ScrollMetrics {
+internal class ScrollMetrics {
     var viewportLength = 1f
     var contentLength = 1f
     var averageLineLength = 1f
@@ -459,7 +459,7 @@ private class ScrollMetrics {
 }
 
 /** Thumb position along the scroll axis. Works for both orientations. */
-private class ThumbGeometry {
+internal class ThumbGeometry {
     var start = 0f
     var length = 0f
     var trackLength = 0f
@@ -489,7 +489,7 @@ private class ThumbGeometry {
     }
 }
 
-private fun Density.resolveThumbLength(
+internal fun Density.resolveThumbLength(
     sizing: ThumbSizing,
     usableLength: Float,
     fraction: Float,
@@ -526,7 +526,7 @@ private fun Density.iconMainAxisLength(style: ScrollbarStyle, isVertical: Boolea
  * Maps a progress (0..1) to the item and pixel offset to scroll to, packed into one Long so
  * nothing is allocated while dragging. Read it back with [keyIndex] and [keyOffset].
  */
-private fun scrollTargetKey(metrics: ScrollMetrics, progress: Float): Long {
+internal fun scrollTargetKey(metrics: ScrollMetrics, progress: Float): Long {
     val index: Int
     val offset: Int
     when {
@@ -543,9 +543,9 @@ private fun scrollTargetKey(metrics: ScrollMetrics, progress: Float): Long {
     return (index.toLong() shl 32) or (offset.toLong() and 0xFFFFFFFFL)
 }
 
-private fun keyIndex(key: Long): Int = (key ushr 32).toInt()
+internal fun keyIndex(key: Long): Int = (key ushr 32).toInt()
 
-private fun keyOffset(key: Long): Int = key.toInt()
+internal fun keyOffset(key: Long): Int = key.toInt()
 
 /**
  * Non-suspending, so it's safe from the pointer-input scope. Skips the request when the
