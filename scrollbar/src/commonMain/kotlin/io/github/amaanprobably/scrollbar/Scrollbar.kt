@@ -46,11 +46,19 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -60,6 +68,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -127,7 +136,7 @@ sealed interface ThumbAppearance {
      * - [idle] is shown at rest and after release. [dragging] is faded in while the thumb is
      *   held. Leave it out to use one icon for both states.
      * - [tint] recolors the icons. Leave it [Color.Unspecified] to keep their own colors, which
-     *   is what you want for multi-color logos.
+     *   is what you want for multicolor logos.
      * - [draggingScale] grows the icon slightly while it is held. Use `1f` to turn it off.
      * - The icon is never mirrored or rotated, only positioned. For right-to-left layouts, set
      *   `autoMirror` on a vector yourself if it should flip.
@@ -163,9 +172,55 @@ sealed interface ThumbAppearance {
 }
 
 /**
+ * When the scrollbar is visible. Either way it only shows when the list can actually scroll and
+ * has more than `minItemsToShow` items.
+ */
+enum class ScrollbarVisibility {
+    /** Fades in while scrolling or dragging and fades out after [ScrollbarStyle.hideDelay]. */
+    AutoHide,
+
+    /** Always visible, so users can see where they are and grab the thumb at any time. */
+    Always,
+}
+
+/**
+ * Look of the bubble that [ScrollbarLabel] shows next to the thumb while it is dragged.
+ */
+@Immutable
+class ScrollbarLabelStyle(
+    val textStyle: TextStyle = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.Medium),
+    val textColor: Color = Color.White,
+    val bubbleColor: Color = Color(0xE6212121),
+    val cornerRadius: Dp = 14.dp,
+    val horizontalPadding: Dp = 14.dp,
+    val verticalPadding: Dp = 8.dp,
+    /** Distance between the thumb and the bubble. */
+    val gap: Dp = 8.dp,
+)
+
+/**
+ * A bubble that follows the thumb while it is dragged and shows where you are in the list, for
+ * example the first letter of a contact or a date. It sits on the inner side of the thumb.
+ *
+ * [provider] gets the index of the item the list is jumping to. For grids this is the first item
+ * of the target row or column. Return the text to show, or `null` to hide the bubble for that item.
+ * It runs on the main thread every time the drag moves to a different item, so keep it cheap.
+ *
+ * For sections (an A-Z list, for example), return the same text for every item of a section.
+ * With [sectionHaptics], the device ticks whenever the text changes, so a per-item label like
+ * "Item 1234" would tick constantly. Turn [sectionHaptics] off for labels like that.
+ */
+@Stable
+class ScrollbarLabel(
+    val sectionHaptics: Boolean = true,
+    val style: ScrollbarLabelStyle = ScrollbarLabelStyle(),
+    val provider: (itemIndex: Int) -> String?,
+)
+
+/**
  * Visual and timing configuration for [scrollbar].
  *
- * The "capsule" is the translucent rounded background that wraps the thumb and moves with it.
+ * The "capsule" is the translucent, rounded background that wraps the thumb and moves with it.
  * Create instances with [ScrollbarDefaults.style].
  *
  * The capsule, thumb thickness, thumb color and [ThumbSizing] parameters only apply to
@@ -177,6 +232,7 @@ class ScrollbarStyle internal constructor(
     val pressedThumbThickness: Dp,
     val thumbSizing: ThumbSizing,
     val thumbAppearance: ThumbAppearance,
+    val visibility: ScrollbarVisibility,
     val touchTargetThickness: Dp,
     val trackPadding: Dp,
     val edgePadding: Dp,
@@ -197,6 +253,7 @@ object ScrollbarDefaults {
         pressedThumbThickness: Dp = 8.dp,
         thumbSizing: ThumbSizing = ThumbSizing.Fixed(),
         thumbAppearance: ThumbAppearance = ThumbAppearance.Default,
+        visibility: ScrollbarVisibility = ScrollbarVisibility.AutoHide,
         touchTargetThickness: Dp = 48.dp,
         trackPadding: Dp = 8.dp,
         edgePadding: Dp = 4.dp,
@@ -213,6 +270,7 @@ object ScrollbarDefaults {
         pressedThumbThickness = pressedThumbThickness,
         thumbSizing = thumbSizing,
         thumbAppearance = thumbAppearance,
+        visibility = visibility,
         touchTargetThickness = touchTargetThickness,
         trackPadding = trackPadding,
         edgePadding = edgePadding,
@@ -241,6 +299,11 @@ object ScrollbarDefaults {
  * @param contentPadding Pass the same padding the list uses (including system insets) so the
  * track stays inside it. Only the padding along the scroll axis is applied; use
  * [ScrollbarStyle.edgePadding] to move the bar away from the cross-axis edge.
+ * @param label Shows a bubble next to the thumb while it is dragged. See [ScrollbarLabel].
+ * @param scrollToStartLabel Accessibility label for a "scroll to start" action. No action is
+ * added when `null`.
+ * @param scrollToEndLabel Accessibility label for a "scroll to end" action. No action is added
+ * when `null`.
  */
 @Composable
 fun Modifier.scrollbar(
@@ -249,11 +312,15 @@ fun Modifier.scrollbar(
     contentPadding: PaddingValues = PaddingValues(0.dp),
     minItemsToShow: Int = 10,
     style: ScrollbarStyle = ScrollbarDefaults.style(),
+    label: ScrollbarLabel? = null,
     scrollToStartLabel: String? = null,
     scrollToEndLabel: String? = null,
 ): Modifier {
     val target = remember(listState) { ListScrollbarTarget(listState) }
-    return scrollbarFor(target, edge, contentPadding, minItemsToShow, style, scrollToStartLabel, scrollToEndLabel)
+    return scrollbarFor(
+        target, edge, contentPadding, minItemsToShow, style, label,
+        scrollToStartLabel, scrollToEndLabel,
+    )
 }
 
 /**
@@ -271,11 +338,15 @@ fun Modifier.scrollbar(
     contentPadding: PaddingValues = PaddingValues(0.dp),
     minItemsToShow: Int = 10,
     style: ScrollbarStyle = ScrollbarDefaults.style(),
+    label: ScrollbarLabel? = null,
     scrollToStartLabel: String? = null,
     scrollToEndLabel: String? = null,
 ): Modifier {
     val target = remember(gridState) { GridScrollbarTarget(gridState) }
-    return scrollbarFor(target, edge, contentPadding, minItemsToShow, style, scrollToStartLabel, scrollToEndLabel)
+    return scrollbarFor(
+        target, edge, contentPadding, minItemsToShow, style, label,
+        scrollToStartLabel, scrollToEndLabel,
+    )
 }
 
 // Targets: what the scrollbar needs from a lazy layout, so lists and grids share one code path.
@@ -437,14 +508,10 @@ private fun Density.iconMainAxisLength(style: ScrollbarStyle, isVertical: Boolea
 }
 
 /**
- * Non-suspending, so it's safe from the pointer-input scope. Skips the request when the
- * target is unchanged. Returns the key of the request.
+ * Maps a progress (0..1) to the item and pixel offset to scroll to, packed into one Long so
+ * nothing is allocated while dragging. Read it back with [keyIndex] and [keyOffset].
  */
-private fun ScrollbarTarget.scrollToProgress(
-    metrics: ScrollMetrics,
-    progress: Float,
-    lastKey: Long,
-): Long {
+private fun scrollTargetKey(metrics: ScrollMetrics, progress: Float): Long {
     val index: Int
     val offset: Int
     when {
@@ -458,8 +525,24 @@ private fun ScrollbarTarget.scrollToProgress(
             offset = (targetOffset - line * metrics.averageLineLength).roundToInt().coerceAtLeast(0)
         }
     }
-    val key = (index.toLong() shl 32) or (offset.toLong() and 0xFFFFFFFFL)
-    if (key != lastKey) requestScrollToItem(index, offset)
+    return (index.toLong() shl 32) or (offset.toLong() and 0xFFFFFFFFL)
+}
+
+private fun keyIndex(key: Long): Int = (key ushr 32).toInt()
+
+private fun keyOffset(key: Long): Int = key.toInt()
+
+/**
+ * Non-suspending, so it's safe from the pointer-input scope. Skips the request when the
+ * target is unchanged. Returns the key of the request.
+ */
+private fun ScrollbarTarget.scrollToProgress(
+    metrics: ScrollMetrics,
+    progress: Float,
+    lastKey: Long,
+): Long {
+    val key = scrollTargetKey(metrics, progress)
+    if (key != lastKey) requestScrollToItem(keyIndex(key), keyOffset(key))
     return key
 }
 
@@ -485,6 +568,9 @@ private class ScrollbarController(
     val press = Animatable(0f)
     val settle = Animatable(0f) // 1 = at release position, 0 = at live position
 
+    /** Text of the label bubble. Written while dragging, read by the draw phase. */
+    var label by mutableStateOf<String?>(null)
+
     /** Smoothed viewport/content ratio. Only used by [ThumbSizing.Proportional] with smoothing. */
     val smoothedFraction = Animatable(1f)
 
@@ -498,6 +584,7 @@ private class ScrollbarController(
     private val events = Channel<Unit>(Channel.CONFLATED)
     private var fadeJob: Job? = null
     private var lastScrollOffset = Int.MIN_VALUE
+    private var appliedVisibility = ScrollbarVisibility.AutoHide
 
     /** Fed by a snapshotFlow. Signals activity only on real movement. */
     fun onScrollOffsetChanged(offset: Int) {
@@ -510,6 +597,9 @@ private class ScrollbarController(
     }
 
     fun signalActivity() {
+        // Always visible: nothing to show or hide, applyVisibility() already faded the bar in.
+        if (style.visibility == ScrollbarVisibility.Always) return
+
         events.trySend(Unit)
 
         val job = fadeJob
@@ -534,6 +624,24 @@ private class ScrollbarController(
         }
     }
 
+    /**
+     * Called when the visibility mode changes. The initial auto-hide value does nothing, so the
+     * bar doesn't flash when it first appears.
+     */
+    fun applyVisibility(visibility: ScrollbarVisibility) {
+        if (visibility == appliedVisibility) return
+        appliedVisibility = visibility
+        fadeJob?.cancel()
+        fadeJob = null
+        if (visibility == ScrollbarVisibility.Always) {
+            fadeJob = scope.launch {
+                fade.animateTo(1f, tween(style.fadeInDuration.inWholeMilliseconds.toInt()))
+            }
+        } else {
+            signalActivity() // back to auto-hide: fades out after the usual delay
+        }
+    }
+
     fun beginDrag(progress: Float) {
         dragProgress = progress
         dragging = true
@@ -547,7 +655,7 @@ private class ScrollbarController(
             settle.snapTo(1f)
             settle.animateTo(0f, tween(150))
         }
-        dragging = false // before signalling, so the fade job sees the drag has ended
+        dragging = false // before signaling, so the fade job sees the drag has ended
         signalActivity()
     }
 
@@ -565,6 +673,7 @@ private class ScrollbarConfig(
     val minItemsToShow: Int,
     val edge: FastScrollEdge,
     val layoutDirection: LayoutDirection,
+    val label: ScrollbarLabel?,
 ) {
     /** True when the bar sits at the left (vertical) or top (horizontal) of the list. */
     fun isCrossAxisAtOrigin(isVertical: Boolean): Boolean =
@@ -593,21 +702,28 @@ private fun Modifier.scrollbarFor(
     contentPadding: PaddingValues,
     minItemsToShow: Int,
     style: ScrollbarStyle,
+    label: ScrollbarLabel?,
     // Accessibility labels
-    scrollToStartLabel: String? = null,
-    scrollToEndLabel: String? = null,
+    scrollToStartLabel: String?,
+    scrollToEndLabel: String?,
 ): Modifier {
     val haptics = LocalHapticFeedback.current
     val layoutDirection = LocalLayoutDirection.current
     val scope = rememberCoroutineScope()
+    val textMeasurer = rememberTextMeasurer()
 
-    val config = ScrollbarConfig(style, contentPadding, minItemsToShow, edge, layoutDirection)
+    val config = ScrollbarConfig(style, contentPadding, minItemsToShow, edge, layoutDirection, label)
     val latestConfig by rememberUpdatedState(config)
 
     val controller = remember(scope) { ScrollbarController(scope, style) }
 
     SideEffect { controller.style = style }
     DisposableEffect(controller) { onDispose { controller.close() } }
+
+    // Switches between auto-hide and always-visible without restarting anything else.
+    LaunchedEffect(controller, style.visibility) {
+        controller.applyVisibility(style.visibility)
+    }
 
     // snapshotFlow instead of keying on `dragging`: no recomposition at drag start/end.
     LaunchedEffect(controller) {
@@ -665,6 +781,9 @@ private fun Modifier.scrollbarFor(
             if (!metrics.update(target) || metrics.itemCount <= currentConfig.minItemsToShow) {
                 return@awaitEachGesture
             }
+            // Nothing to scroll means nothing is drawn, so nothing may be grabbed either. This
+            // matters in Always mode, where the bar's alpha stays at 1.
+            if (metrics.contentLength <= metrics.viewportLength) return@awaitEachGesture
 
             val isVertical = target.isVertical
             val isMirrored = currentConfig.isMirrored(target)
@@ -715,8 +834,16 @@ private fun Modifier.scrollbarFor(
                 return visualProgress(onScreen, isMirrored)
             }
 
+            val labelConfig = currentConfig.label
+            var lastLabelIndex = Int.MIN_VALUE
             try {
                 controller.frozenFraction = shownFraction
+                if (labelConfig != null) {
+                    lastLabelIndex = keyIndex(scrollTargetKey(metrics, metrics.progress))
+                    controller.label = labelConfig.provider(lastLabelIndex)
+                } else {
+                    controller.label = null
+                }
                 controller.beginDrag(metrics.progress)
                 haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 down.consume()
@@ -740,6 +867,19 @@ private fun Modifier.scrollbarFor(
                     val mainPosition = if (isVertical) change.position.y else change.position.x
                     controller.dragProgress = progressAt(mainPosition)
                     lastKey = target.scrollToProgress(metrics, controller.dragProgress, lastKey)
+                    if (labelConfig != null) {
+                        val labelIndex = keyIndex(lastKey)
+                        if (labelIndex != lastLabelIndex) {
+                            lastLabelIndex = labelIndex
+                            val newText = labelConfig.provider(labelIndex)
+                            if (newText != controller.label) {
+                                if (labelConfig.sectionHaptics && newText != null) {
+                                    haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                                }
+                                controller.label = newText
+                            }
+                        }
+                    }
                     change.consume()
                 }
             } finally {
@@ -759,7 +899,7 @@ private fun Modifier.scrollbarFor(
             scrollToEndLabel?.let { label ->
                 CustomAccessibilityAction(label) {
                     // The list clamps this to the true end.
-                    target.requestScrollToItem(target.totalItemsCount - 1, 0)
+                    target.requestScrollToItem((target.totalItemsCount - 1).coerceAtLeast(0), 0)
                     true
                 }
             },
@@ -822,45 +962,65 @@ private fun Modifier.scrollbarFor(
             if (geometry.length <= 0f) return@drawWithContent
 
             val pressed = controller.press.value
-
+            val atOrigin = config.isCrossAxisAtOrigin(isVertical)
             val appearance = style.thumbAppearance
+
+            // Where the thumb sits across the scroll axis, shared by both looks and the label.
+            val thumbCrossLength: Float
+            val thumbCrossStart: Float
+
             if (appearance is ThumbAppearance.Icon) {
-                val iconCrossLength =
+                thumbCrossLength =
                     (if (isVertical) appearance.size.width else appearance.size.height).toPx()
-                val iconCrossStart =
-                    if (config.isCrossAxisAtOrigin(isVertical)) style.edgePadding.toPx()
-                    else crossLength - iconCrossLength - style.edgePadding.toPx()
+                thumbCrossStart =
+                    if (atOrigin) style.edgePadding.toPx()
+                    else crossLength - thumbCrossLength - style.edgePadding.toPx()
                 drawThumbIcon(
                     icon = appearance,
                     isVertical = isVertical,
                     geometry = geometry,
-                    crossStart = iconCrossStart,
+                    crossStart = thumbCrossStart,
                     alpha = alpha,
                     pressed = pressed,
                 )
-                return@drawWithContent
+            } else {
+                thumbCrossLength = style.capsuleThickness.toPx()
+                thumbCrossStart =
+                    if (atOrigin) style.edgePadding.toPx()
+                    else crossLength - thumbCrossLength - style.edgePadding.toPx()
+                drawScrollbar(
+                    isVertical = isVertical,
+                    geometry = geometry,
+                    alpha = alpha,
+                    thumbColor = lerpColor(style.thumbColor, style.pressedThumbColor, pressed),
+                    thumbThickness = lerp(
+                        style.thumbThickness.toPx(),
+                        style.pressedThumbThickness.toPx(),
+                        pressed,
+                    ),
+                    capsuleCrossStart = thumbCrossStart,
+                    capsuleThickness = thumbCrossLength,
+                    capsuleExtraLength = style.capsuleExtraLength.toPx(),
+                    capsuleColor = style.capsuleColor,
+                )
             }
 
-            val capsuleThickness = style.capsuleThickness.toPx()
-            val capsuleCrossStart =
-                if (config.isCrossAxisAtOrigin(isVertical)) style.edgePadding.toPx()
-                else crossLength - capsuleThickness - style.edgePadding.toPx()
-
-            drawScrollbar(
-                isVertical = isVertical,
-                geometry = geometry,
-                alpha = alpha,
-                thumbColor = lerpColor(style.thumbColor, style.pressedThumbColor, pressed),
-                thumbThickness = lerp(
-                    style.thumbThickness.toPx(),
-                    style.pressedThumbThickness.toPx(),
-                    pressed,
-                ),
-                capsuleCrossStart = capsuleCrossStart,
-                capsuleThickness = capsuleThickness,
-                capsuleExtraLength = style.capsuleExtraLength.toPx(),
-                capsuleColor = style.capsuleColor,
-            )
+            // The bubble follows the press animation, so it fades in on grab and out on release.
+            val labelText = controller.label
+            if (label != null && labelText != null && pressed > 0f) {
+                drawLabelBubble(
+                    textMeasurer = textMeasurer,
+                    text = labelText,
+                    labelStyle = label.style,
+                    isVertical = isVertical,
+                    thumbStart = geometry.start,
+                    thumbLength = geometry.length,
+                    thumbCrossStart = thumbCrossStart,
+                    thumbCrossLength = thumbCrossLength,
+                    thumbAtOrigin = atOrigin,
+                    alpha = alpha * pressed,
+                )
+            }
         }
 }
 
@@ -912,6 +1072,75 @@ private fun DrawScope.drawPainter(
     colorFilter: ColorFilter?,
 ) {
     with(painter) { draw(size = size, alpha = alpha, colorFilter = colorFilter) }
+}
+
+/**
+ * Draws the label bubble on the inner side of the thumb, centered on it along the scroll axis and
+ * kept inside the list. Text measurements are cached by the [TextMeasurer], so a repeated label
+ * costs a lookup, not a new layout.
+ */
+private fun DrawScope.drawLabelBubble(
+    textMeasurer: TextMeasurer,
+    text: String,
+    labelStyle: ScrollbarLabelStyle,
+    isVertical: Boolean,
+    thumbStart: Float,
+    thumbLength: Float,
+    thumbCrossStart: Float,
+    thumbCrossLength: Float,
+    thumbAtOrigin: Boolean,
+    alpha: Float,
+) {
+    val horizontalPadding = labelStyle.horizontalPadding.toPx()
+    val verticalPadding = labelStyle.verticalPadding.toPx()
+    val gap = labelStyle.gap.toPx()
+    val containerLength = if (isVertical) size.height else size.width
+    val crossLength = if (isVertical) size.width else size.height
+
+    // Long labels are cut with an ellipsis instead of growing past the list.
+    val maxTextWidth = (
+            (if (isVertical) crossLength else containerLength) - 2f * horizontalPadding
+            ).coerceAtLeast(1f)
+    val layout = textMeasurer.measure(
+        text = text,
+        style = labelStyle.textStyle,
+        overflow = TextOverflow.Ellipsis,
+        softWrap = false,
+        maxLines = 1,
+        constraints = Constraints(maxWidth = maxTextWidth.toInt()),
+        layoutDirection = layoutDirection,
+        density = this,
+    )
+
+    val bubbleWidth = layout.size.width + 2f * horizontalPadding
+    val bubbleHeight = layout.size.height + 2f * verticalPadding
+    val bubbleMainLength = if (isVertical) bubbleHeight else bubbleWidth
+    val bubbleCrossLength = if (isVertical) bubbleWidth else bubbleHeight
+
+    // coerceIn() with an upper bound floored at 0 can't throw on an empty range.
+    val mainStart = (thumbStart + thumbLength / 2f - bubbleMainLength / 2f)
+        .coerceIn(0f, (containerLength - bubbleMainLength).coerceAtLeast(0f))
+    val crossStart = (
+            if (thumbAtOrigin) thumbCrossStart + thumbCrossLength + gap
+            else thumbCrossStart - gap - bubbleCrossLength
+            ).coerceIn(0f, (crossLength - bubbleCrossLength).coerceAtLeast(0f))
+    val topLeft = pointOf(isVertical, mainStart, crossStart)
+
+    drawRoundRect(
+        color = labelStyle.bubbleColor,
+        topLeft = topLeft,
+        size = Size(bubbleWidth, bubbleHeight),
+        cornerRadius = CornerRadius(
+            min(labelStyle.cornerRadius.toPx(), min(bubbleWidth, bubbleHeight) / 2f),
+        ),
+        alpha = alpha,
+    )
+    drawText(
+        textLayoutResult = layout,
+        color = labelStyle.textColor,
+        topLeft = Offset(topLeft.x + horizontalPadding, topLeft.y + verticalPadding),
+        alpha = alpha,
+    )
 }
 
 private fun DrawScope.drawScrollbar(

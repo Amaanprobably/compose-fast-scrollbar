@@ -11,7 +11,8 @@ A draggable fast scrollbar for Compose Multiplatform lazy layouts. One modifier,
 - Fixed-length thumb by default, with an optional proportional (and smoothed) thumb.
 - `contentPadding` support, so the track stays clear of system bars and insets.
 - RTL and `reverseLayout` support.
-- Auto-hides after scrolling stops, with a smooth settle animation after you release the thumb.
+- Auto-hides after scrolling stops, with a smooth settle animation after you release the thumb. Or keep it always visible.
+- Optional label bubble next to the thumb while dragging (a letter, date or section name), with a haptic tick when you cross into a new section.
 - Fully styleable: thickness, colors, timings and edge placement.
 - Use your own brand icon or logo as the thumb, with separate idle and dragging icons.
 - No recomposition while scrolling or dragging. All state is read in the draw phase.
@@ -67,6 +68,29 @@ Notes on icon thumbs:
 - The icon is never mirrored or rotated. For right-to-left layouts, set `autoMirror` on a vector if you want it to flip.
 - Use `remember`ed painters (`painterResource` already does this). Animated painters might work but aren't tested yet.
 
+### Label bubble and section haptics
+
+```kotlin
+Modifier.scrollbar(
+    listState,
+    label = ScrollbarLabel { itemIndex -> contacts[itemIndex].name.first().toString() },
+)
+```
+
+- The lambda gets the index of the item the list is jumping to and returns the text, or `null` to hide the bubble. It runs on the main thread whenever the drag moves to a different item, so keep it cheap.
+- The device ticks whenever the returned text changes. Return the same text for every item in a section (A, B, C...) and you get one tick per section.
+- For per-item labels like "Item 1234", pass `sectionHaptics = false`, or it will tick constantly.
+- Style the bubble with `ScrollbarLabelStyle`.
+
+### Always-visible bar
+
+```kotlin
+Modifier.scrollbar(
+    listState,
+    style = ScrollbarDefaults.style(visibility = ScrollbarVisibility.Always),
+)
+```
+
 ### Grids
 
 ```kotlin
@@ -119,21 +143,22 @@ ScrollbarDefaults.style(
 
 ### Thumb sizing
 
-| Option | Behavior |
-|---|---|
-| `ThumbSizing.Fixed(length)` | Constant length. This is the default, and it never jitters. |
+| Option                          | Behavior                                                                                             |
+|---------------------------------|------------------------------------------------------------------------------------------------------|
+| `ThumbSizing.Fixed(length)`     | Constant length. This is the default, and it never jitters.                                          |
 | `ThumbSizing.Proportional(...)` | Length follows viewport / content. `smoothed = true` animates changes in the estimated content size. |
 
 ### Parameters
 
-| Parameter | Default | Description |
-|---|---|---|
-| `edge` | `END` | Which side of the cross axis the bar sits on. For horizontal lists, `START` is the top and `END` is the bottom. |
-| `contentPadding` | `0.dp` | Padding along the scroll axis that the track stays inside. |
-| `minItemsToShow` | `10` | The bar stays hidden for lists with this many items or fewer. |
-| `style` | `ScrollbarDefaults.style()` | Sizes, colors, timings and the thumb appearance. |
-| `scrollToStartLabel` | `null` | Accessibility label for a "scroll to start" action. No action is added when `null`. |
-| `scrollToEndLabel` | `null` | Accessibility label for a "scroll to end" action. No action is added when `null`. |
+| Parameter            | Default                     | Description                                                                                                     |
+|----------------------|-----------------------------|-----------------------------------------------------------------------------------------------------------------|
+| `edge`               | `END`                       | Which side of the cross axis the bar sits on. For horizontal lists, `START` is the top and `END` is the bottom. |
+| `contentPadding`     | `0.dp`                      | Padding along the scroll axis that the track stays inside.                                                      |
+| `minItemsToShow`     | `10`                        | The bar stays hidden for lists with this many items or fewer.                                                   |
+| `style`              | `ScrollbarDefaults.style()` | Sizes, colors, timings and the thumb appearance.                                                                |
+| `label`              | `null`                      | Bubble shown next to the thumb while dragging. See above.                                                       |
+| `scrollToStartLabel` | `null`                      | Accessibility label for a "scroll to start" action. No action is added when `null`.                             |
+| `scrollToEndLabel`   | `null`                      | Accessibility label for a "scroll to end" action. No action is added when `null`.                               |
 
 ## Known limitations
 
@@ -142,16 +167,14 @@ ScrollbarDefaults.style(
 
 ## Roadmap
 
-- Position label bubble shown while dragging (a letter, date or section name)
-- Always-visible mode
-- Haptic ticks when crossing sections
+- Desktop mouse support: hover reveal, hover highlight, track click
 - TalkBack and VoiceOver actions
 
 ## Project structure
 
-| Module | Purpose |
-|---|---|
-| `/scrollbar` | The library. Source lives in `commonMain`. |
+| Module                                  | Purpose                                            |
+|-----------------------------------------|----------------------------------------------------|
+| `/scrollbar`                            | The library. Source lives in `commonMain`.         |
 | `/androidApp`, `/desktopApp`, `/iosApp` | Demo apps for trying the library on each platform. |
 
 > `iosX64` (the Intel-Mac simulator) isn't a target, because Compose Multiplatform doesn't publish artifacts for it.
@@ -171,5 +194,3 @@ ScrollbarDefaults.style(
 ## License
 
 To be decided before the first release.
-
-&nbsp;
