@@ -67,6 +67,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -299,6 +300,9 @@ object ScrollbarDefaults {
  * @param contentPadding Pass the same padding the list uses (including system insets) so the
  * track stays inside it. Only the padding along the scroll axis is applied; use
  * [ScrollbarStyle.edgePadding] to move the bar away from the cross-axis edge.
+ * @param hasMore Set to `true` for feeds that load more items as you scroll. While it is `true`
+ * the thumb stops short of the very end, because the list is not really finished. When it
+ * becomes `false` the thumb glides to the end. Leave it `false` for lists with a known size.
  * @param label Shows a bubble next to the thumb while it is dragged. See [ScrollbarLabel].
  * @param scrollToStartLabel Accessibility label for a "scroll to start" action. No action is
  * added when `null`.
@@ -311,6 +315,7 @@ fun Modifier.scrollbar(
     edge: FastScrollEdge = FastScrollEdge.END,
     contentPadding: PaddingValues = PaddingValues(0.dp),
     minItemsToShow: Int = 10,
+    hasMore: Boolean = false,
     style: ScrollbarStyle = ScrollbarDefaults.style(),
     label: ScrollbarLabel? = null,
     scrollToStartLabel: String? = null,
@@ -318,7 +323,7 @@ fun Modifier.scrollbar(
 ): Modifier {
     val target = remember(listState) { ListScrollbarTarget(listState) }
     return scrollbarFor(
-        target, edge, contentPadding, minItemsToShow, style, label,
+        target, edge, contentPadding, minItemsToShow, hasMore, style, label,
         scrollToStartLabel, scrollToEndLabel,
     )
 }
@@ -337,6 +342,7 @@ fun Modifier.scrollbar(
     edge: FastScrollEdge = FastScrollEdge.END,
     contentPadding: PaddingValues = PaddingValues(0.dp),
     minItemsToShow: Int = 10,
+    hasMore: Boolean = false,
     style: ScrollbarStyle = ScrollbarDefaults.style(),
     label: ScrollbarLabel? = null,
     scrollToStartLabel: String? = null,
@@ -344,7 +350,7 @@ fun Modifier.scrollbar(
 ): Modifier {
     val target = remember(gridState) { GridScrollbarTarget(gridState) }
     return scrollbarFor(
-        target, edge, contentPadding, minItemsToShow, style, label,
+        target, edge, contentPadding, minItemsToShow, hasMore, style, label,
         scrollToStartLabel, scrollToEndLabel,
     )
 }
@@ -501,6 +507,15 @@ private fun Density.resolveThumbLength(
 
 private const val NO_LENGTH_OVERRIDE = -1f
 
+/** Marks that the draw phase has no previous frame to compare with. */
+private const val NO_BASELINE = -1
+
+/**
+ * While more items can still load, the thumb stops here instead of at the very end, because the
+ * real end isn't known yet.
+ */
+private const val HAS_MORE_END_CAP = 0.95f
+
 /** An icon decides the thumb length itself. Returns [NO_LENGTH_OVERRIDE] for the default look. */
 private fun Density.iconMainAxisLength(style: ScrollbarStyle, isVertical: Boolean): Float {
     val icon = style.thumbAppearance as? ThumbAppearance.Icon ?: return NO_LENGTH_OVERRIDE
@@ -567,6 +582,18 @@ private class ScrollbarController(
     val fade = Animatable(0f)
     val press = Animatable(0f)
     val settle = Animatable(0f) // 1 = at release position, 0 = at live position
+
+    /**
+     * Offset added to the drawn thumb position that decays to 0. It hides jumps when the item
+     * count changes (pages loading, prepends) and when the drag is re-anchored.
+     */
+    val glide = Animatable(0f)
+    private var glideJob: Job? = null
+
+    // What the previous non-drag frame drew. Plain fields on purpose: nothing observes them.
+    var lastDrawnCount = NO_BASELINE
+    var lastDrawnEndCap = 1f
+    var lastDrawnProgress = 0f
 
     /** Text of the label bubble. Written while dragging, read by the draw phase. */
     var label by mutableStateOf<String?>(null)
@@ -642,16 +669,46 @@ private class ScrollbarController(
         }
     }
 
+    /** Starts a glide that hides a jump of [delta] (old position minus new position). */
+    fun startGlide(delta: Float) {
+        if (abs(delta) < 0.002f) return
+        glideJob?.cancel()
+        // UNDISPATCHED so the offset is in place before the next draw reads it.
+        glideJob = scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            glide.snapTo((glide.value + delta).coerceIn(-1f, 1f))
+            glide.animateTo(0f, tween(250))
+        }
+    }
+
+    /**
+     * Called every non-drag frame with what is about to be drawn. When the item count or the end
+     * cap changed since the last frame, the thumb would jump, so glide it instead.
+     */
+    fun noteShownProgress(itemCount: Int, endCap: Float, shownProgress: Float) {
+        if (lastDrawnCount != NO_BASELINE && (itemCount != lastDrawnCount || endCap != lastDrawnEndCap)) {
+            startGlide(lastDrawnProgress + glide.value - shownProgress)
+        }
+        lastDrawnCount = itemCount
+        lastDrawnEndCap = endCap
+        lastDrawnProgress = shownProgress
+    }
+
     fun beginDrag(progress: Float) {
+        glideJob?.cancel()
+        glideJob = scope.launch(start = CoroutineStart.UNDISPATCHED) { glide.snapTo(0f) }
+        lastDrawnCount = NO_BASELINE
         dragProgress = progress
         dragging = true
         signalActivity()
     }
 
     fun endDrag() {
-        settleFrom = dragProgress
+        settleFrom = (dragProgress + glide.value).coerceIn(0f, 1f)
+        glideJob?.cancel()
+        lastDrawnCount = NO_BASELINE
         // UNDISPATCHED so settle is 1f before the next draw (no one-frame flash).
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            glide.snapTo(0f)
             settle.snapTo(1f)
             settle.animateTo(0f, tween(150))
         }
@@ -661,6 +718,7 @@ private class ScrollbarController(
 
     fun close() {
         fadeJob?.cancel()
+        glideJob?.cancel()
         fadeJob = null
         events.close()
     }
@@ -674,7 +732,11 @@ private class ScrollbarConfig(
     val edge: FastScrollEdge,
     val layoutDirection: LayoutDirection,
     val label: ScrollbarLabel?,
+    val hasMore: Boolean,
 ) {
+    /** Largest thumb progress. Below 1 while more items can still load. */
+    val endCap: Float get() = if (hasMore) HAS_MORE_END_CAP else 1f
+
     /** True when the bar sits at the left (vertical) or top (horizontal) of the list. */
     fun isCrossAxisAtOrigin(isVertical: Boolean): Boolean =
         if (isVertical) (edge == FastScrollEdge.START) == (layoutDirection == LayoutDirection.Ltr)
@@ -701,6 +763,7 @@ private fun Modifier.scrollbarFor(
     edge: FastScrollEdge,
     contentPadding: PaddingValues,
     minItemsToShow: Int,
+    hasMore: Boolean,
     style: ScrollbarStyle,
     label: ScrollbarLabel?,
     // Accessibility labels
@@ -712,7 +775,7 @@ private fun Modifier.scrollbarFor(
     val scope = rememberCoroutineScope()
     val textMeasurer = rememberTextMeasurer()
 
-    val config = ScrollbarConfig(style, contentPadding, minItemsToShow, edge, layoutDirection, label)
+    val config = ScrollbarConfig(style, contentPadding, minItemsToShow, edge, layoutDirection, label, hasMore)
     val latestConfig by rememberUpdatedState(config)
 
     val controller = remember(scope) { ScrollbarController(scope, style) }
@@ -777,6 +840,7 @@ private fun Modifier.scrollbarFor(
 
             val currentConfig = latestConfig
             val currentStyle = currentConfig.style
+            val endCap = currentConfig.endCap
             val metrics = controller.frozen
             if (!metrics.update(target) || metrics.itemCount <= currentConfig.minItemsToShow) {
                 return@awaitEachGesture
@@ -802,7 +866,7 @@ private fun Modifier.scrollbarFor(
                 endPadding = endPadding,
                 sizing = sizing,
                 fraction = shownFraction,
-                visualProgress = visualProgress(metrics.progress, isMirrored),
+                visualProgress = visualProgress(metrics.progress * endCap, isMirrored),
                 lengthOverride = this.iconMainAxisLength(currentStyle, isVertical),
             )
             val trackLength = geometry.trackLength
@@ -827,7 +891,9 @@ private fun Modifier.scrollbarFor(
             if (!insideCrossAxis || !insideMainAxis) return@awaitEachGesture
 
             // Keep the finger's position inside the thumb so it never jumps.
-            val grabOffset = (downMain - geometry.start).coerceIn(0f, geometry.length)
+            var grabOffset = (downMain - geometry.start).coerceIn(0f, geometry.length)
+
+            /** Thumb position (0..endCap) for a finger position. Not yet divided by [endCap]. */
             fun progressAt(mainPosition: Float): Float {
                 val onScreen = ((mainPosition - grabOffset - startPadding) / trackLength)
                     .coerceIn(0f, 1f)
@@ -836,6 +902,7 @@ private fun Modifier.scrollbarFor(
 
             val labelConfig = currentConfig.label
             var lastLabelIndex = Int.MIN_VALUE
+            var countWatcher: Job? = null
             try {
                 controller.frozenFraction = shownFraction
                 if (labelConfig != null) {
@@ -844,12 +911,35 @@ private fun Modifier.scrollbarFor(
                 } else {
                     controller.label = null
                 }
-                controller.beginDrag(metrics.progress)
+                controller.beginDrag(metrics.progress * endCap)
                 haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 down.consume()
                 scope.launch { target.state.stopScroll() } // cancel any running fling
 
                 var lastKey = Long.MIN_VALUE
+                var lastMainPosition = downMain
+
+                // The item count changed mid-drag (a page loaded, items were prepended). Refresh
+                // the metrics and continue from where the list really is, with the finger kept
+                // on the thumb's new position, so there is no fake end and no jump.
+                fun rebaseToLiveMetrics() {
+                    val shownBefore = controller.dragProgress
+                    if (!metrics.update(target)) return
+                    val shownNow = metrics.progress * endCap
+                    grabOffset = lastMainPosition - startPadding -
+                            trackLength * visualProgress(shownNow, isMirrored)
+                    controller.dragProgress = shownNow
+                    controller.startGlide(shownBefore - shownNow)
+                    lastKey = Long.MIN_VALUE
+                }
+
+                // Covers a finger held still while a page loads. Exists only during a drag.
+                countWatcher = scope.launch {
+                    snapshotFlow { target.totalItemsCount }.collect { count ->
+                        if (count != metrics.itemCount) rebaseToLiveMetrics()
+                    }
+                }
+
                 while (true) {
                     val event = awaitPointerEvent(PointerEventPass.Initial)
                     var change: PointerInputChange? = null
@@ -865,8 +955,14 @@ private fun Modifier.scrollbarFor(
                         break
                     }
                     val mainPosition = if (isVertical) change.position.y else change.position.x
+                    lastMainPosition = mainPosition
+                    if (target.totalItemsCount != metrics.itemCount) rebaseToLiveMetrics()
                     controller.dragProgress = progressAt(mainPosition)
-                    lastKey = target.scrollToProgress(metrics, controller.dragProgress, lastKey)
+                    lastKey = target.scrollToProgress(
+                        metrics,
+                        (controller.dragProgress / endCap).coerceIn(0f, 1f),
+                        lastKey,
+                    )
                     if (labelConfig != null) {
                         val labelIndex = keyIndex(lastKey)
                         if (labelIndex != lastLabelIndex) {
@@ -884,6 +980,7 @@ private fun Modifier.scrollbarFor(
                 }
             } finally {
                 // Runs on lift, cancel, and pointer-input restart, so no stuck state.
+                countWatcher?.cancel()
                 controller.endDrag()
             }
         }
@@ -922,27 +1019,38 @@ private fun Modifier.scrollbarFor(
                 // Frozen snapshot only: no live layoutInfo reads while dragging.
                 alpha = 1f
                 fraction = controller.frozenFraction
-                progress = controller.dragProgress
+                progress = (controller.dragProgress + controller.glide.value).coerceIn(0f, 1f)
             } else {
                 val indicator = target.state.scrollIndicatorState ?: return@drawWithContent
                 val content = indicator.contentSize.toFloat()
                 val viewport = indicator.viewportSize.toFloat()
-                if (viewport <= 0f || content <= viewport) return@drawWithContent
-                if (target.totalItemsCount <= config.minItemsToShow) return@drawWithContent
+                val itemCount = target.totalItemsCount
+                if (viewport <= 0f || content <= viewport || itemCount <= config.minItemsToShow) {
+                    controller.lastDrawnCount = NO_BASELINE // nothing drawn, nothing to compare
+                    return@drawWithContent
+                }
 
                 // Read before the alpha check so scrolling always invalidates the draw.
                 val offset = indicator.scrollOffset
+
+                val endCap = config.endCap
+                val live = target.state.pinnedProgress(
+                    offset.toFloat(),
+                    (content - viewport).coerceAtLeast(1f),
+                ) * endCap
+                // Runs even while hidden, so a bar fading in later has a fresh baseline.
+                controller.noteShownProgress(itemCount, endCap, live)
 
                 alpha = controller.fade.value
                 if (alpha <= 0f) return@drawWithContent
 
                 fraction = controller.displayedFraction(style.thumbSizing, viewport / content)
-                val live = target.state.pinnedProgress(
-                    offset.toFloat(),
-                    (content - viewport).coerceAtLeast(1f),
-                )
                 // After release, glide from where the finger left to the real position.
-                progress = lerp(live, controller.settleFrom, controller.settle.value)
+                // The glide offset hides jumps from item count changes.
+                progress = (
+                        lerp(live, controller.settleFrom, controller.settle.value) +
+                                controller.glide.value
+                        ).coerceIn(0f, 1f)
             }
 
             val containerLength = if (isVertical) size.height else size.width

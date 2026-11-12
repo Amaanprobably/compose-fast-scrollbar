@@ -82,6 +82,16 @@ Modifier.scrollbar(
 - For per-item labels like "Item 1234", pass `sectionHaptics = false`, or it will tick constantly.
 - Style the bubble with `ScrollbarLabelStyle`.
 
+### Infinite feeds
+
+Lists that load more items as you scroll don't have a known end. Tell the scrollbar with `hasMore`:
+
+```kotlin
+Modifier.scrollbar(listState, hasMore = hasMore)
+```
+
+While `hasMore` is `true`, the thumb stops short of the very end, and dragging to the bottom jumps to the last loaded item. If a page loads while you are dragging, the drag continues into the new content. When `hasMore` becomes `false`, the thumb glides to the end. Item count changes (pagination, prepended messages) glide the thumb instead of snapping it. If your list uses Paging placeholders, the total is already known and you don't need `hasMore`.
+
 ### Always-visible bar
 
 ```kotlin
@@ -156,6 +166,7 @@ ScrollbarDefaults.style(
 | `contentPadding`     | `0.dp`                      | Padding along the scroll axis that the track stays inside.                                                      |
 | `minItemsToShow`     | `10`                        | The bar stays hidden for lists with this many items or fewer.                                                   |
 | `style`              | `ScrollbarDefaults.style()` | Sizes, colors, timings and the thumb appearance.                                                                |
+| `hasMore`            | `false`                     | `true` for feeds that load more as you scroll. See above.                                                       |
 | `label`              | `null`                      | Bubble shown next to the thumb while dragging. See above.                                                       |
 | `scrollToStartLabel` | `null`                      | Accessibility label for a "scroll to start" action. No action is added when `null`.                             |
 | `scrollToEndLabel`   | `null`                      | Accessibility label for a "scroll to end" action. No action is added when `null`.                               |

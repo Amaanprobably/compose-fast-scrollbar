@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,9 +28,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,15 +42,11 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import io.github.amaanprobably.scrollbar.ScrollbarDefaults
 import io.github.amaanprobably.scrollbar.ScrollbarLabel
-import io.github.amaanprobably.scrollbar.ScrollbarStyle
 import io.github.amaanprobably.scrollbar.ScrollbarVisibility
 import io.github.amaanprobably.scrollbar.scrollbar
+import kotlinx.coroutines.delay
 
-private enum class Demo(val title: String) {
-    Column("Column"),
-    Grid("Grid"),
-    Row("Row")
-}
+private enum class Demo(val title: String) { Column("Column"), Grid("Grid"), Row("Row"), Feed("Feed") }
 
 private val itemCountOptions = listOf(5, 50, 10_000)
 
@@ -109,6 +108,7 @@ fun App() {
                     Demo.Column -> ColumnDemo(itemCount, reverseLayout, withPadding, style, label, demoModifier)
                     Demo.Grid -> GridDemo(itemCount, reverseLayout, withPadding, style, label, demoModifier)
                     Demo.Row -> RowDemo(itemCount, reverseLayout, withPadding, style, label, demoModifier)
+                    Demo.Feed -> FeedDemo(style, demoModifier)
                 }
             }
         }
@@ -175,7 +175,7 @@ private fun ColumnDemo(
     itemCount: Int,
     reverseLayout: Boolean,
     withPadding: Boolean,
-    style: ScrollbarStyle,
+    style: io.github.amaanprobably.scrollbar.ScrollbarStyle,
     label: ScrollbarLabel?,
     modifier: Modifier,
 ) {
@@ -201,7 +201,7 @@ private fun GridDemo(
     itemCount: Int,
     reverseLayout: Boolean,
     withPadding: Boolean,
-    style: ScrollbarStyle,
+    style: io.github.amaanprobably.scrollbar.ScrollbarStyle,
     label: ScrollbarLabel?,
     modifier: Modifier,
 ) {
@@ -235,7 +235,7 @@ private fun RowDemo(
     itemCount: Int,
     reverseLayout: Boolean,
     withPadding: Boolean,
-    style: ScrollbarStyle,
+    style: io.github.amaanprobably.scrollbar.ScrollbarStyle,
     label: ScrollbarLabel?,
     modifier: Modifier,
 ) {
@@ -251,6 +251,43 @@ private fun RowDemo(
             Cell(
                 text = "${sectionLetter(index, itemCount)}\n$index",
                 modifier = Modifier.width(variableSize(index, base = 70, spread = 80).dp).fillMaxSize(),
+            )
+        }
+    }
+}
+
+private const val FEED_PAGE_SIZE = 30
+private const val FEED_TOTAL = 300
+
+/** Simulates an infinite feed: 30 more items arrive 600 ms after you get near the end. */
+@Composable
+private fun FeedDemo(
+    style: io.github.amaanprobably.scrollbar.ScrollbarStyle,
+    modifier: Modifier,
+) {
+    val listState = rememberLazyListState()
+    var loadedCount by remember { mutableStateOf(FEED_PAGE_SIZE) }
+    val hasMore = loadedCount < FEED_TOTAL
+    val label = remember { ScrollbarLabel(sectionHaptics = false) { index -> "Page ${index / FEED_PAGE_SIZE + 1}" } }
+
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
+            .collect { lastVisible ->
+                if (lastVisible != null && lastVisible >= loadedCount - 5 && loadedCount < FEED_TOTAL) {
+                    delay(600)
+                    loadedCount += FEED_PAGE_SIZE
+                }
+            }
+    }
+
+    LazyColumn(
+        state = listState,
+        modifier = modifier.scrollbar(listState, hasMore = hasMore, style = style, label = label),
+    ) {
+        items(loadedCount, key = { it }) { index ->
+            Cell(
+                text = "Post $index",
+                modifier = Modifier.fillMaxWidth().height(variableSize(index, base = 60, spread = 80).dp),
             )
         }
     }
