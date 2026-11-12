@@ -13,6 +13,7 @@ A draggable fast scrollbar for Compose Multiplatform lazy layouts. One modifier,
 - RTL and `reverseLayout` support.
 - Auto-hides after scrolling stops, with a smooth settle animation after you release the thumb.
 - Fully styleable: thickness, colors, timings and edge placement.
+- Use your own brand icon or logo as the thumb, with separate idle and dragging icons.
 - No recomposition while scrolling or dragging. All state is read in the draw phase.
 
 ## Installation
@@ -42,6 +43,29 @@ LazyColumn(
     items(1_000) { index -> Text("Item $index") }
 }
 ```
+
+Or if you want to specify your own brand icon/logo as the thumb itself:
+
+```kotlin
+Modifier.scrollbar(
+    listState,
+    style = ScrollbarDefaults.style(
+        thumbAppearance = ThumbAppearance.Icon(
+            idle = painterResource(Res.drawable.logo),
+            dragging = painterResource(Res.drawable.logo_active),
+            size = DpSize(48.dp, 48.dp),
+        ),
+    ),
+)
+```
+
+Notes on icon thumbs:
+
+- `size` is required. It becomes the thumb length along the scroll axis, and the capsule, thickness, color and `ThumbSizing` options are ignored.
+- `dragging` is optional. Leave it out to use one icon for both states.
+- `tint` is off by default, so multi-color logos keep their colors.
+- The icon is never mirrored or rotated. For right-to-left layouts, set `autoMirror` on a vector if you want it to flip.
+- Use `remember`ed painters (`painterResource` already does this). Animated painters might work but aren't tested yet.
 
 ### Grids
 
@@ -79,7 +103,7 @@ Modifier.scrollbar(
         thumbColor = Color.Gray,
         pressedThumbColor = Color(0xFF6200EE),
         thumbSizing = ThumbSizing.Proportional(minLength = 40.dp),
-        hideDelayMillis = 2_000,
+        hideDelay = 2.seconds,
     ),
 )
 ```
@@ -107,7 +131,9 @@ ScrollbarDefaults.style(
 | `edge` | `END` | Which side of the cross axis the bar sits on. For horizontal lists, `START` is the top and `END` is the bottom. |
 | `contentPadding` | `0.dp` | Padding along the scroll axis that the track stays inside. |
 | `minItemsToShow` | `10` | The bar stays hidden for lists with this many items or fewer. |
-| `style` | `ScrollbarDefaults.style()` | Sizes, colors and timings. |
+| `style` | `ScrollbarDefaults.style()` | Sizes, colors, timings and the thumb appearance. |
+| `scrollToStartLabel` | `null` | Accessibility label for a "scroll to start" action. No action is added when `null`. |
+| `scrollToEndLabel` | `null` | Accessibility label for a "scroll to end" action. No action is added when `null`. |
 
 ## Known limitations
 
@@ -119,7 +145,6 @@ ScrollbarDefaults.style(
 - Position label bubble shown while dragging (a letter, date or section name)
 - Always-visible mode
 - Haptic ticks when crossing sections
-- Custom thumb icon
 - TalkBack and VoiceOver actions
 
 ## Project structure
@@ -146,3 +171,5 @@ ScrollbarDefaults.style(
 ## License
 
 To be decided before the first release.
+
+&nbsp;

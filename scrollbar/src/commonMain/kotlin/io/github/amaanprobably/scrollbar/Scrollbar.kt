@@ -17,6 +17,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -31,7 +32,11 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputChange
@@ -43,6 +48,7 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
@@ -53,6 +59,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -102,16 +109,74 @@ sealed interface ThumbSizing {
 }
 
 /**
+ * What the draggable thumb looks like.
+ */
+sealed interface ThumbAppearance {
+    /**
+     * The built-in look: a translucent capsule with a thin thumb inside it. It uses the style's
+     * thickness, color and [ThumbSizing] parameters.
+     */
+    data object Default : ThumbAppearance
+
+    /**
+     * Replaces the whole capsule and thumb with your own icon, for example a brand logo.
+     *
+     * - [size] is required (an icon's own intrinsic size is ignored). Along the scroll axis it
+     *   becomes the thumb length, so [ThumbSizing] and the style's capsule, thickness and color
+     *   parameters are ignored while an icon is used.
+     * - [idle] is shown at rest and after release. [dragging] is faded in while the thumb is
+     *   held. Leave it out to use one icon for both states.
+     * - [tint] recolors the icons. Leave it [Color.Unspecified] to keep their own colors, which
+     *   is what you want for multi-color logos.
+     * - [draggingScale] grows the icon slightly while it is held. Use `1f` to turn it off.
+     * - The icon is never mirrored or rotated, only positioned. For right-to-left layouts, set
+     *   `autoMirror` on a vector yourself if it should flip.
+     * - Touches anywhere on the icon grab it. The touch target is never smaller than
+     *   [ScrollbarStyle.touchTargetThickness].
+     *
+     * Painters should be created with `remember` (as `painterResource` and `rememberVectorPainter`
+     * already do). A painter created on every recomposition is replaced mid-scroll.
+     *
+     * Animated painters can work, because the icon is drawn every frame while the bar is
+     * visible, but they are not tested yet. A painter that animates forever keeps redrawing for as
+     * long as the bar is visible.
+     */
+    @Stable
+    class Icon(
+        val idle: Painter,
+        val size: DpSize,
+        val dragging: Painter = idle,
+        val tint: Color = Color.Unspecified,
+        val draggingScale: Float = 1.1f,
+    ) : ThumbAppearance {
+        init {
+            require(size.width > 0.dp && size.height > 0.dp) {
+                "size must be specified and positive"
+            }
+            require(draggingScale > 0f) { "draggingScale must be positive" }
+        }
+
+        // Built once, not per frame.
+        internal val colorFilter: ColorFilter? =
+            if (tint.isSpecified) ColorFilter.tint(tint) else null
+    }
+}
+
+/**
  * Visual and timing configuration for [scrollbar].
  *
  * The "capsule" is the translucent rounded background that wraps the thumb and moves with it.
  * Create instances with [ScrollbarDefaults.style].
+ *
+ * The capsule, thumb thickness, thumb color and [ThumbSizing] parameters only apply to
+ * [ThumbAppearance.Default]. [ThumbAppearance.Icon] replaces all of them.
  */
-@Immutable
+@Stable
 class ScrollbarStyle internal constructor(
     val thumbThickness: Dp,
     val pressedThumbThickness: Dp,
     val thumbSizing: ThumbSizing,
+    val thumbAppearance: ThumbAppearance,
     val touchTargetThickness: Dp,
     val trackPadding: Dp,
     val edgePadding: Dp,
@@ -131,6 +196,7 @@ object ScrollbarDefaults {
         thumbThickness: Dp = 5.dp,
         pressedThumbThickness: Dp = 8.dp,
         thumbSizing: ThumbSizing = ThumbSizing.Fixed(),
+        thumbAppearance: ThumbAppearance = ThumbAppearance.Default,
         touchTargetThickness: Dp = 48.dp,
         trackPadding: Dp = 8.dp,
         edgePadding: Dp = 4.dp,
@@ -146,6 +212,7 @@ object ScrollbarDefaults {
         thumbThickness = thumbThickness,
         pressedThumbThickness = pressedThumbThickness,
         thumbSizing = thumbSizing,
+        thumbAppearance = thumbAppearance,
         touchTargetThickness = touchTargetThickness,
         trackPadding = trackPadding,
         edgePadding = edgePadding,
@@ -328,13 +395,18 @@ private class ThumbGeometry {
         sizing: ThumbSizing,
         fraction: Float,
         visualProgress: Float,
+        lengthOverride: Float,
     ) {
         val usable = (containerLength - startPadding - endPadding).coerceAtLeast(0f)
         if (usable <= 0f) {
             start = startPadding; length = 0f; trackLength = 0f
             return
         }
-        length = density.resolveThumbLength(sizing, usable, fraction)
+        length = if (lengthOverride >= 0f) {
+            lengthOverride.coerceAtMost(usable)
+        } else {
+            density.resolveThumbLength(sizing, usable, fraction)
+        }
         trackLength = (usable - length).coerceAtLeast(0f)
         start = startPadding + trackLength * visualProgress
     }
@@ -354,6 +426,14 @@ private fun Density.resolveThumbLength(
             .coerceAtMost(usableLength)
         (usableLength * fraction).coerceAtLeast(minLength).coerceAtMost(maxLength)
     }
+}
+
+private const val NO_LENGTH_OVERRIDE = -1f
+
+/** An icon decides the thumb length itself. Returns [NO_LENGTH_OVERRIDE] for the default look. */
+private fun Density.iconMainAxisLength(style: ScrollbarStyle, isVertical: Boolean): Float {
+    val icon = style.thumbAppearance as? ThumbAppearance.Icon ?: return NO_LENGTH_OVERRIDE
+    return (if (isVertical) icon.size.height else icon.size.width).toPx()
 }
 
 /**
@@ -604,11 +684,18 @@ private fun Modifier.scrollbarFor(
                 sizing = sizing,
                 fraction = shownFraction,
                 visualProgress = visualProgress(metrics.progress, isMirrored),
+                lengthOverride = this.iconMainAxisLength(currentStyle, isVertical),
             )
             val trackLength = geometry.trackLength
             if (trackLength <= 0f) return@awaitEachGesture
 
-            val touchThickness = currentStyle.touchTargetThickness.toPx()
+            // An icon wider than the touch target must still be grabbable across its whole width.
+            val iconCrossExtent = (currentStyle.thumbAppearance as? ThumbAppearance.Icon)
+                ?.let { icon ->
+                    (if (isVertical) icon.size.width else icon.size.height).toPx() +
+                            currentStyle.edgePadding.toPx()
+                } ?: 0f
+            val touchThickness = max(currentStyle.touchTargetThickness.toPx(), iconCrossExtent)
             val downMain = if (isVertical) down.position.y else down.position.x
             val downCross = if (isVertical) down.position.x else down.position.y
             val insideCrossAxis =
@@ -730,10 +817,30 @@ private fun Modifier.scrollbarFor(
                 sizing = style.thumbSizing,
                 fraction = fraction,
                 visualProgress = visualProgress(progress, isMirrored),
+                lengthOverride = this.iconMainAxisLength(style, isVertical),
             )
             if (geometry.length <= 0f) return@drawWithContent
 
             val pressed = controller.press.value
+
+            val appearance = style.thumbAppearance
+            if (appearance is ThumbAppearance.Icon) {
+                val iconCrossLength =
+                    (if (isVertical) appearance.size.width else appearance.size.height).toPx()
+                val iconCrossStart =
+                    if (config.isCrossAxisAtOrigin(isVertical)) style.edgePadding.toPx()
+                    else crossLength - iconCrossLength - style.edgePadding.toPx()
+                drawThumbIcon(
+                    icon = appearance,
+                    isVertical = isVertical,
+                    geometry = geometry,
+                    crossStart = iconCrossStart,
+                    alpha = alpha,
+                    pressed = pressed,
+                )
+                return@drawWithContent
+            }
+
             val capsuleThickness = style.capsuleThickness.toPx()
             val capsuleCrossStart =
                 if (config.isCrossAxisAtOrigin(isVertical)) style.edgePadding.toPx()
@@ -762,6 +869,50 @@ private fun pointOf(isVertical: Boolean, main: Float, cross: Float): Offset =
 
 private fun sizeOf(isVertical: Boolean, mainLength: Float, crossLength: Float): Size =
     if (isVertical) Size(crossLength, mainLength) else Size(mainLength, crossLength)
+
+/**
+ * Draws the icon centered on the thumb position. The idle and dragging icons crossfade with the
+ * press animation, and a single icon (idle === dragging) is drawn once, so it never dims halfway.
+ */
+private fun DrawScope.drawThumbIcon(
+    icon: ThumbAppearance.Icon,
+    isVertical: Boolean,
+    geometry: ThumbGeometry,
+    crossStart: Float,
+    alpha: Float,
+    pressed: Float,
+) {
+    val iconWidth = icon.size.width.toPx()
+    val iconHeight = icon.size.height.toPx()
+    val mainLength = if (isVertical) iconHeight else iconWidth
+    val mainStart = geometry.start + (geometry.length - mainLength) / 2f
+    val topLeft = pointOf(isVertical, mainStart, crossStart)
+    val iconSize = Size(iconWidth, iconHeight)
+    val scale = lerp(1f, icon.draggingScale, pressed)
+
+    withTransform({
+        translate(left = topLeft.x, top = topLeft.y)
+        scale(scaleX = scale, scaleY = scale, pivot = Offset(iconWidth / 2f, iconHeight / 2f))
+    }) {
+        if (icon.dragging === icon.idle) {
+            drawPainter(icon.idle, iconSize, alpha, icon.colorFilter)
+        } else {
+            val idleAlpha = alpha * (1f - pressed)
+            val draggingAlpha = alpha * pressed
+            if (idleAlpha > 0f) drawPainter(icon.idle, iconSize, idleAlpha, icon.colorFilter)
+            if (draggingAlpha > 0f) drawPainter(icon.dragging, iconSize, draggingAlpha, icon.colorFilter)
+        }
+    }
+}
+
+private fun DrawScope.drawPainter(
+    painter: Painter,
+    size: Size,
+    alpha: Float,
+    colorFilter: ColorFilter?,
+) {
+    with(painter) { draw(size = size, alpha = alpha, colorFilter = colorFilter) }
+}
 
 private fun DrawScope.drawScrollbar(
     isVertical: Boolean,
