@@ -46,6 +46,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -285,6 +286,9 @@ object ScrollbarDefaults {
     )
 }
 
+/** One shared instance, so calls that don't pass a style neither allocate nor look "changed". */
+internal val DefaultScrollbarStyle: ScrollbarStyle = ScrollbarDefaults.style()
+
 /**
  * Draggable fast scroller for a [androidx.compose.foundation.lazy.LazyColumn] or
  * [androidx.compose.foundation.lazy.LazyRow].
@@ -315,7 +319,7 @@ fun Modifier.scrollbar(
     contentPadding: PaddingValues = PaddingValues(0.dp),
     minItemsToShow: Int = 10,
     hasMore: Boolean = false,
-    style: ScrollbarStyle = ScrollbarDefaults.style(),
+    style: ScrollbarStyle = DefaultScrollbarStyle,
     label: ScrollbarLabel? = null,
     scrollToStartLabel: String? = null,
     scrollToEndLabel: String? = null,
@@ -342,7 +346,7 @@ fun Modifier.scrollbar(
     contentPadding: PaddingValues = PaddingValues(0.dp),
     minItemsToShow: Int = 10,
     hasMore: Boolean = false,
-    style: ScrollbarStyle = ScrollbarDefaults.style(),
+    style: ScrollbarStyle = DefaultScrollbarStyle,
     label: ScrollbarLabel? = null,
     scrollToStartLabel: String? = null,
     scrollToEndLabel: String? = null,
@@ -390,19 +394,28 @@ private class GridScrollbarTarget(override val state: LazyGridState) : Scrollbar
     override val totalItemsCount: Int
         get() = state.layoutInfo.totalItemsCount
 
-    /** The most items found in any visible line. Only called when the thumb is grabbed. */
+    /**
+     * The most items found in any visible line. Only called when the thumb is grabbed.
+     * Visible items come in index order, so the items of one line are next to each other and a
+     * single pass is enough, with no allocation.
+     */
     override val itemsPerLine: Int
         get() {
             val visibleItems = state.layoutInfo.visibleItemsInfo
             val vertical = isVertical
-            val countPerLine = HashMap<Int, Int>()
             var mostInOneLine = 1
+            var itemsInCurrentLine = 0
+            var currentLine = Int.MIN_VALUE
             for (itemIndex in visibleItems.indices) {
                 val item = visibleItems[itemIndex]
                 val line = if (vertical) item.row else item.column
-                val count = (countPerLine[line] ?: 0) + 1
-                countPerLine[line] = count
-                if (count > mostInOneLine) mostInOneLine = count
+                if (line == currentLine) {
+                    itemsInCurrentLine++
+                } else {
+                    currentLine = line
+                    itemsInCurrentLine = 1
+                }
+                if (itemsInCurrentLine > mostInOneLine) mostInOneLine = itemsInCurrentLine
             }
             return mostInOneLine
         }
@@ -596,6 +609,7 @@ private class ScrollbarController(
 
     /** Text of the label bubble. Written while dragging, read by the draw phase. */
     var label by mutableStateOf<String?>(null)
+    val labelLayoutCache = LabelLayoutCache()
 
     /** Smoothed viewport/content ratio. Only used by [ThumbSizing.Proportional] with smoothing. */
     val smoothedFraction = Animatable(1f)
@@ -723,6 +737,59 @@ private class ScrollbarController(
     }
 }
 
+/**
+ * Keeps the last measured label, so an unchanged label isn't measured again on every frame while
+ * dragging. Only used from the draw phase.
+ */
+private class LabelLayoutCache {
+    private var text: String? = null
+    private var maxWidth = -1
+    private var textStyle: TextStyle? = null
+    private var layoutDirection: LayoutDirection? = null
+    private var density = 0f
+    private var fontScale = 0f
+    private var layout: TextLayoutResult? = null
+
+    fun measure(
+        textMeasurer: TextMeasurer,
+        text: String,
+        textStyle: TextStyle,
+        maxWidth: Int,
+        layoutDirection: LayoutDirection,
+        density: Density,
+    ): TextLayoutResult {
+        val cached = layout
+        if (cached != null &&
+            text == this.text &&
+            maxWidth == this.maxWidth &&
+            textStyle == this.textStyle &&
+            layoutDirection == this.layoutDirection &&
+            density.density == this.density &&
+            density.fontScale == this.fontScale
+        ) {
+            return cached
+        }
+        val result = textMeasurer.measure(
+            text = text,
+            style = textStyle,
+            overflow = TextOverflow.Ellipsis,
+            softWrap = false,
+            maxLines = 1,
+            constraints = Constraints(maxWidth = maxWidth),
+            layoutDirection = layoutDirection,
+            density = density,
+        )
+        this.text = text
+        this.maxWidth = maxWidth
+        this.textStyle = textStyle
+        this.layoutDirection = layoutDirection
+        this.density = density.density
+        this.fontScale = density.fontScale
+        layout = result
+        return result
+    }
+}
+
 /** Everything the draw and pointer code read from the call site, bundled for one-shot updates. */
 private class ScrollbarConfig(
     val style: ScrollbarStyle,
@@ -794,14 +861,21 @@ private fun Modifier.scrollbarFor(
         }
     }
 
-    // Wakes the bar on real scroll movement, even while it is hidden.
-    LaunchedEffect(controller, target) {
+    // Wakes the bar on real scroll movement, even while it is hidden. Not needed when the bar is
+    // always visible, because signalActivity() does nothing then.
+    val alwaysVisible = style.visibility == ScrollbarVisibility.Always
+    LaunchedEffect(controller, target, alwaysVisible) {
+        if (alwaysVisible) return@LaunchedEffect
         snapshotFlow { target.state.scrollIndicatorState?.scrollOffset }
             .collect { offset -> if (offset != null) controller.onScrollOffsetChanged(offset) }
     }
 
     // Proportional sizing only: animates the estimated ratio so content-size jitter is hidden.
-    LaunchedEffect(controller, target) {
+    // The default fixed thumb doesn't launch it, so it doesn't re-run on every scroll frame.
+    val sizingOption = style.thumbSizing
+    val smoothingEnabled = sizingOption is ThumbSizing.Proportional && sizingOption.smoothed
+    LaunchedEffect(controller, target, smoothingEnabled) {
+        if (!smoothingEnabled) return@LaunchedEffect
         var hasBaseline = false
         snapshotFlow {
             val sizing = latestConfig.style.thumbSizing
@@ -839,6 +913,25 @@ private fun Modifier.scrollbarFor(
 
             val currentConfig = latestConfig
             val currentStyle = currentConfig.style
+            val isVertical = target.isVertical
+            val crossLength = (if (isVertical) size.width else size.height).toFloat()
+
+            // Cheapest check first: most touches on the list are nowhere near the bar, and they
+            // must not pay for the metrics below (which allocate for grids).
+            // An icon wider than the touch target must still be grabbable across its whole width.
+            val iconCrossExtent = (currentStyle.thumbAppearance as? ThumbAppearance.Icon)
+                ?.let { icon ->
+                    (if (isVertical) icon.size.width else icon.size.height).toPx() +
+                            currentStyle.edgePadding.toPx()
+                } ?: 0f
+            val touchThickness = max(currentStyle.touchTargetThickness.toPx(), iconCrossExtent)
+            val downMain = if (isVertical) down.position.y else down.position.x
+            val downCross = if (isVertical) down.position.x else down.position.y
+            val insideCrossAxis =
+                if (currentConfig.isCrossAxisAtOrigin(isVertical)) downCross <= touchThickness
+                else downCross >= crossLength - touchThickness
+            if (!insideCrossAxis) return@awaitEachGesture
+
             val endCap = currentConfig.endCap
             val metrics = controller.frozen
             if (!metrics.update(target) || metrics.itemCount <= currentConfig.minItemsToShow) {
@@ -848,12 +941,10 @@ private fun Modifier.scrollbarFor(
             // matters in Always mode, where the bar's alpha stays at 1.
             if (metrics.contentLength <= metrics.viewportLength) return@awaitEachGesture
 
-            val isVertical = target.isVertical
             val isMirrored = currentConfig.isMirrored(target)
             val startPadding = currentConfig.mainAxisStartPadding(isVertical).toPx()
             val endPadding = currentConfig.mainAxisEndPadding(isVertical).toPx()
             val containerLength = (if (isVertical) size.height else size.width).toFloat()
-            val crossLength = (if (isVertical) size.width else size.height).toFloat()
 
             val sizing = currentStyle.thumbSizing
             val shownFraction = controller.displayedFraction(sizing, metrics.thumbFraction)
@@ -871,23 +962,11 @@ private fun Modifier.scrollbarFor(
             val trackLength = geometry.trackLength
             if (trackLength <= 0f) return@awaitEachGesture
 
-            // An icon wider than the touch target must still be grabbable across its whole width.
-            val iconCrossExtent = (currentStyle.thumbAppearance as? ThumbAppearance.Icon)
-                ?.let { icon ->
-                    (if (isVertical) icon.size.width else icon.size.height).toPx() +
-                            currentStyle.edgePadding.toPx()
-                } ?: 0f
-            val touchThickness = max(currentStyle.touchTargetThickness.toPx(), iconCrossExtent)
-            val downMain = if (isVertical) down.position.y else down.position.x
-            val downCross = if (isVertical) down.position.x else down.position.y
-            val insideCrossAxis =
-                if (currentConfig.isCrossAxisAtOrigin(isVertical)) downCross <= touchThickness
-                else downCross >= crossLength - touchThickness
             val insideMainAxis =
                 downMain in (geometry.start - slop)..(geometry.start + geometry.length + slop)
 
             // Not on the thumb: consume nothing, the list handles it.
-            if (!insideCrossAxis || !insideMainAxis) return@awaitEachGesture
+            if (!insideMainAxis) return@awaitEachGesture
 
             // Keep the finger's position inside the thumb so it never jumps.
             var grabOffset = (downMain - geometry.start).coerceIn(0f, geometry.length)
@@ -1015,7 +1094,7 @@ private fun Modifier.scrollbarFor(
             val progress: Float
 
             if (controller.dragging) {
-                // Frozen snapshot only: no live layoutInfo reads while dragging.
+                // The thumb follows the finger, not the live scroll offset, while dragging.
                 alpha = 1f
                 fraction = controller.frozenFraction
                 progress = (controller.dragProgress + controller.glide.value).coerceIn(0f, 1f)
@@ -1117,6 +1196,7 @@ private fun Modifier.scrollbarFor(
             if (label != null && labelText != null && pressed > 0f) {
                 drawLabelBubble(
                     textMeasurer = textMeasurer,
+                    layoutCache = controller.labelLayoutCache,
                     text = labelText,
                     labelStyle = label.style,
                     isVertical = isVertical,
@@ -1188,6 +1268,7 @@ private fun DrawScope.drawPainter(
  */
 private fun DrawScope.drawLabelBubble(
     textMeasurer: TextMeasurer,
+    layoutCache: LabelLayoutCache,
     text: String,
     labelStyle: ScrollbarLabelStyle,
     isVertical: Boolean,
@@ -1208,13 +1289,11 @@ private fun DrawScope.drawLabelBubble(
     val maxTextWidth = (
             (if (isVertical) crossLength else containerLength) - 2f * horizontalPadding
             ).coerceAtLeast(1f)
-    val layout = textMeasurer.measure(
+    val layout = layoutCache.measure(
+        textMeasurer = textMeasurer,
         text = text,
-        style = labelStyle.textStyle,
-        overflow = TextOverflow.Ellipsis,
-        softWrap = false,
-        maxLines = 1,
-        constraints = Constraints(maxWidth = maxTextWidth.toInt()),
+        textStyle = labelStyle.textStyle,
+        maxWidth = maxTextWidth.toInt(),
         layoutDirection = layoutDirection,
         density = this,
     )
