@@ -248,7 +248,6 @@ class ScrollbarStyle internal constructor(
 )
 
 object ScrollbarDefaults {
-    @Composable
     fun style(
         thumbThickness: Dp = 5.dp,
         pressedThumbThickness: Dp = 8.dp,
@@ -686,7 +685,7 @@ private class ScrollbarController(
      */
     fun noteShownProgress(itemCount: Int, endCap: Float, shownProgress: Float) {
         if (lastDrawnCount != NO_BASELINE && (itemCount != lastDrawnCount || endCap != lastDrawnEndCap)) {
-            startGlide(lastDrawnProgress + glide.value - shownProgress)
+            startGlide(lastDrawnProgress - shownProgress)
         }
         lastDrawnCount = itemCount
         lastDrawnEndCap = endCap
