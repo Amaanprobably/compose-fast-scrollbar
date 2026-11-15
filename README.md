@@ -167,6 +167,15 @@ The look follows the platform: a single thin bar on desktop, a finger-sized caps
 
 `ScrollbarDefaults.compactStyle()` gives the full desktop look (thin bar, mouse-sized grab area) everywhere. For a plain bar with a finger-sized grab area on mobile, use `style(thumbAppearance = ThumbAppearance.Bar)`.
 
+Want a different style on desktop and on phones? Set both in one place, with no platform checks of your own:
+
+```kotlin
+val scrollbarStyle = ScrollbarDefaults.platformStyle(
+    touch = ScrollbarDefaults.style(thumbColor = Color.Gray),
+    desktop = ScrollbarDefaults.compactStyle(thumbColor = Color.DarkGray),
+)
+```
+
 Using Material3? Pass your theme colors:
 
 ```kotlin

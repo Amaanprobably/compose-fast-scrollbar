@@ -352,6 +352,20 @@ object ScrollbarDefaults {
     )
 
     /**
+     * Picks [desktop] on desktop and [touch] on Android and iOS, so a multiplatform app can set
+     * both looks in one place, without its own platform checks:
+     *
+     * ```
+     * val scrollbarStyle = ScrollbarDefaults.platformStyle(
+     *     touch = ScrollbarDefaults.style(thumbColor = Color.Gray),
+     *     desktop = ScrollbarDefaults.compactStyle(thumbColor = Color.DarkGray),
+     * )
+     * ```
+     */
+    fun platformStyle(touch: ScrollbarStyle, desktop: ScrollbarStyle): ScrollbarStyle =
+        if (isDesktopPlatform) desktop else touch
+
+    /**
      * The desktop look on every platform: a single thin bar with a mouse-sized grab area. It's
      * what [style] uses on desktop. The grab area is harder to hit with a finger, so on touch
      * screens prefer `style(thumbAppearance = ThumbAppearance.Bar)`.

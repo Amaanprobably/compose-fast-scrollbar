@@ -214,6 +214,14 @@ class StyleDefaultsTest {
     }
 
     @Test
+    fun platformStylePicksTheStyleForThisPlatform() {
+        val touch = ScrollbarDefaults.style(thumbColor = Color.Red)
+        val desktop = ScrollbarDefaults.compactStyle(thumbColor = Color.Blue)
+        val expected = if (isDesktopPlatform) desktop else touch
+        assertTrue(ScrollbarDefaults.platformStyle(touch, desktop) === expected)
+    }
+
+    @Test
     fun compactStyleIsTheDesktopLookEverywhere() {
         val compact = ScrollbarDefaults.compactStyle()
         assertEquals(ThumbAppearance.Bar, compact.thumbAppearance)
