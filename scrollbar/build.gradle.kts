@@ -63,7 +63,7 @@ kotlin {
             }
         }
 
-        val desktopTest by getting {
+        getByName("desktopTest") {
             dependencies {
                 implementation(compose.desktop.currentOs) // native renderer for the test window
             }
@@ -77,5 +77,12 @@ kotlin {
                 implementation(libs.androidx.compose.uiTestManifest) // lets the test launch an activity
             }
         }
+    }
+}
+
+// Compose UI tests need a real Android runtime: they run on the device task, not the JVM host task.
+tasks.withType<Test>().matching { it.name == "testAndroidHostTest" }.configureEach {
+    filter {
+        excludeTestsMatching("io.github.amaanprobably.scrollbar.ScrollbarUiTest")
     }
 }
