@@ -1288,7 +1288,7 @@ private fun Modifier.scrollbarFor(
 
             val startProgress =
                 if (onThumb) metrics.progress * endCap
-                else centeredProgress(geometry, startPadding, downMain, isMirrored)
+                else centeredProgress(geometry, startPadding, downMain, isMirrored).coerceAtMost(endCap)
 
             val labelConfig = currentConfig.label
             var lastLabelIndex = Int.MIN_VALUE
@@ -1408,7 +1408,8 @@ private fun Modifier.scrollbarFor(
                     val mainPosition = if (isVertical) change.position.y else change.position.x
                     lastMainPosition = mainPosition
                     if (target.totalItemsCount != metrics.itemCount) rebaseToLiveMetrics()
-                    controller.dragProgress = progressAt(mainPosition)
+                    // Capped while more can load, so the thumb never claims the real end.
+                    controller.dragProgress = progressAt(mainPosition).coerceAtMost(endCap)
                     lastKey = target.scrollToProgress(
                         metrics,
                         (controller.dragProgress / endCap).coerceIn(0f, 1f),
