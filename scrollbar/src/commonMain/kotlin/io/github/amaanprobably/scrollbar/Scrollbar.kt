@@ -39,7 +39,10 @@ import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerInputChange
+import androidx.compose.ui.input.pointer.PointerType
+import androidx.compose.ui.input.pointer.isPrimaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -74,6 +77,7 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.TimeSource
 import androidx.compose.ui.graphics.lerp as lerpColor
 
 /**
@@ -95,7 +99,7 @@ enum class FastScrollEdge { START, END }
 sealed interface ThumbSizing {
     /** Constant length regardless of content size. */
     @Immutable
-    class Fixed(val length: Dp = 48.dp) : ThumbSizing {
+    class Fixed(val length: Dp = 40.dp) : ThumbSizing {
         init {
             require(length > 0.dp) { "length must be positive" }
         }
@@ -124,10 +128,18 @@ sealed interface ThumbSizing {
  */
 sealed interface ThumbAppearance {
     /**
-     * The built-in look: a translucent capsule with a thin thumb inside it. It uses the style's
-     * thickness, color and [ThumbSizing] parameters.
+     * The built-in touch look: a translucent capsule with a thin thumb inside it. It uses the
+     * style's thickness, color, capsule and [ThumbSizing] parameters.
      */
     data object Default : ThumbAppearance
+
+    /**
+     * A single rounded bar with no capsule, like desktop scrollbars. The default on desktop, and
+     * available everywhere. It uses the style's thumb thickness, color and [ThumbSizing]
+     * parameters; the capsule parameters are ignored. It widens from [ScrollbarStyle.thumbThickness]
+     * to [ScrollbarStyle.pressedThumbThickness] when hovered or dragged.
+     */
+    data object Bar : ThumbAppearance
 
     /**
      * Replaces the whole capsule and thumb with your own icon, for example a brand logo.
@@ -225,8 +237,8 @@ class ScrollbarLabel(
  * The "capsule" is the translucent, rounded background that wraps the thumb and moves with it.
  * Create instances with [ScrollbarDefaults.style].
  *
- * The capsule, thumb thickness, thumb color and [ThumbSizing] parameters only apply to
- * [ThumbAppearance.Default]. [ThumbAppearance.Icon] replaces all of them.
+ * The capsule parameters only apply to [ThumbAppearance.Default]. [ThumbAppearance.Bar] uses the
+ * thumb thickness, color and [ThumbSizing] parameters. [ThumbAppearance.Icon] replaces all of them.
  */
 @Stable
 class ScrollbarStyle internal constructor(
@@ -248,18 +260,71 @@ class ScrollbarStyle internal constructor(
     val capsuleColor: Color,
 )
 
+/** True on desktop (JVM). Set per platform in androidMain, iosMain and desktopMain. */
+internal expect val isDesktopPlatform: Boolean
+
+/** The look and size defaults, which differ between touch and mouse. */
+internal class StyleDefaults(
+    val thumbAppearance: ThumbAppearance,
+    val thumbThickness: Dp,
+    val pressedThumbThickness: Dp,
+    val thumbLength: Dp,
+    val touchTargetThickness: Dp,
+    val trackPadding: Dp,
+    val edgePadding: Dp,
+    val capsuleThickness: Dp,
+    val capsuleExtraLength: Dp,
+)
+
+/** Finger-sized: a big grab target, like the platform fast scrollers. */
+internal val TouchDefaults = StyleDefaults(
+    thumbAppearance = ThumbAppearance.Default,
+    thumbThickness = 5.dp,
+    pressedThumbThickness = 8.dp,
+    thumbLength = 40.dp,
+    touchTargetThickness = 48.dp,
+    trackPadding = 8.dp,
+    edgePadding = 4.dp,
+    capsuleThickness = 32.dp,
+    capsuleExtraLength = 16.dp,
+)
+
+/** Mouse-sized: a single thin bar, like desktop scrollbars. */
+internal val CompactDefaults = StyleDefaults(
+    thumbAppearance = ThumbAppearance.Bar,
+    thumbThickness = 8.dp,
+    pressedThumbThickness = 12.dp,
+    thumbLength = 40.dp,
+    touchTargetThickness = 16.dp,
+    trackPadding = 4.dp,
+    edgePadding = 2.dp,
+    capsuleThickness = 16.dp,
+    capsuleExtraLength = 8.dp,
+)
+
+/** Compact on desktop, touch-sized on Android and iOS. */
+internal val PlatformDefaults: StyleDefaults get() = if (isDesktopPlatform) CompactDefaults else TouchDefaults
+
 object ScrollbarDefaults {
+    /**
+     * The default style. It follows the platform: a single thin [ThumbAppearance.Bar] on desktop,
+     * a finger-sized capsule ([ThumbAppearance.Default]) on Android and iOS. Use [compactStyle]
+     * for the desktop look everywhere, or pass `thumbAppearance = ThumbAppearance.Bar` to keep the
+     * touch sizes with a plain bar.
+     *
+     * It is a plain function, so it can be hoisted into a top-level `val` and shared.
+     */
     fun style(
-        thumbThickness: Dp = 5.dp,
-        pressedThumbThickness: Dp = 8.dp,
-        thumbSizing: ThumbSizing = ThumbSizing.Fixed(),
-        thumbAppearance: ThumbAppearance = ThumbAppearance.Default,
+        thumbThickness: Dp = PlatformDefaults.thumbThickness,
+        pressedThumbThickness: Dp = PlatformDefaults.pressedThumbThickness,
+        thumbSizing: ThumbSizing = ThumbSizing.Fixed(PlatformDefaults.thumbLength),
+        thumbAppearance: ThumbAppearance = PlatformDefaults.thumbAppearance,
         visibility: ScrollbarVisibility = ScrollbarVisibility.AutoHide,
-        touchTargetThickness: Dp = 48.dp,
-        trackPadding: Dp = 8.dp,
-        edgePadding: Dp = 4.dp,
-        capsuleThickness: Dp = 38.dp,
-        capsuleExtraLength: Dp = 20.dp,
+        touchTargetThickness: Dp = PlatformDefaults.touchTargetThickness,
+        trackPadding: Dp = PlatformDefaults.trackPadding,
+        edgePadding: Dp = PlatformDefaults.edgePadding,
+        capsuleThickness: Dp = PlatformDefaults.capsuleThickness,
+        capsuleExtraLength: Dp = PlatformDefaults.capsuleExtraLength,
         hideDelay: Duration = 1_500.milliseconds,
         fadeInDuration: Duration = 150.milliseconds,
         fadeOutDuration: Duration = 300.milliseconds,
@@ -267,6 +332,47 @@ object ScrollbarDefaults {
         pressedThumbColor: Color = Color(0xFF2196F3),
         capsuleColor: Color = Color(0x2E808080),
     ): ScrollbarStyle = ScrollbarStyle(
+        thumbThickness = thumbThickness,
+        pressedThumbThickness = pressedThumbThickness,
+        thumbSizing = thumbSizing,
+        thumbAppearance = thumbAppearance,
+        visibility = visibility,
+        touchTargetThickness = touchTargetThickness,
+        trackPadding = trackPadding,
+        edgePadding = edgePadding,
+        capsuleThickness = capsuleThickness,
+        capsuleExtraLength = capsuleExtraLength,
+        hideDelay = hideDelay,
+        fadeInDuration = fadeInDuration,
+        fadeOutDuration = fadeOutDuration,
+        thumbColor = thumbColor,
+        pressedThumbColor = pressedThumbColor,
+        capsuleColor = capsuleColor,
+    )
+
+    /**
+     * The desktop look on every platform: a single thin bar with a mouse-sized grab area. It's
+     * what [style] uses on desktop. The grab area is harder to hit with a finger, so on touch
+     * screens prefer `style(thumbAppearance = ThumbAppearance.Bar)`.
+     */
+    fun compactStyle(
+        thumbThickness: Dp = CompactDefaults.thumbThickness,
+        pressedThumbThickness: Dp = CompactDefaults.pressedThumbThickness,
+        thumbSizing: ThumbSizing = ThumbSizing.Fixed(CompactDefaults.thumbLength),
+        thumbAppearance: ThumbAppearance = CompactDefaults.thumbAppearance,
+        visibility: ScrollbarVisibility = ScrollbarVisibility.AutoHide,
+        touchTargetThickness: Dp = CompactDefaults.touchTargetThickness,
+        trackPadding: Dp = CompactDefaults.trackPadding,
+        edgePadding: Dp = CompactDefaults.edgePadding,
+        capsuleThickness: Dp = CompactDefaults.capsuleThickness,
+        capsuleExtraLength: Dp = CompactDefaults.capsuleExtraLength,
+        hideDelay: Duration = 1_500.milliseconds,
+        fadeInDuration: Duration = 150.milliseconds,
+        fadeOutDuration: Duration = 300.milliseconds,
+        thumbColor: Color = Color(0x80808080),
+        pressedThumbColor: Color = Color(0xFF2196F3),
+        capsuleColor: Color = Color(0x2E808080),
+    ): ScrollbarStyle = style(
         thumbThickness = thumbThickness,
         pressedThumbThickness = pressedThumbThickness,
         thumbSizing = thumbSizing,
@@ -296,6 +402,11 @@ internal val DefaultScrollbarStyle: ScrollbarStyle = ScrollbarDefaults.style()
  * Apply it to the lazy list itself. Only touches that land on the thumb are taken;
  * every other touch reaches the list untouched.
  *
+ * With a mouse (desktop, or a mouse on Android and iPad), hovering near the bar reveals it and
+ * highlights the thumb, hovering the track previews the [label] for that position, and clicking
+ * the track jumps there. Mouse wheel and trackpad scrolling always reach the list. Touch
+ * behavior is unaffected by any of this.
+ *
  * **Position accuracy:** lazy lists only know the size of items they've measured, so dragging
  * maps the thumb to an item using the average item size. With uniform items it's exact, with
  * variable sizes the list can land slightly off the thumb.
@@ -311,6 +422,9 @@ internal val DefaultScrollbarStyle: ScrollbarStyle = ScrollbarDefaults.style()
  * added when `null`.
  * @param scrollToEndLabel Accessibility label for a "scroll to end" action. No action is added
  * when `null`.
+ * @param onEdgeChange Lets users move the bar to the other side: long-press the thumb without
+ * moving, drag it across, and it snaps to the nearest edge. Store the new edge and pass it back
+ * as [edge], like any setting. Touch only. Off when `null`.
  */
 @Composable
 fun Modifier.scrollbar(
@@ -323,11 +437,12 @@ fun Modifier.scrollbar(
     label: ScrollbarLabel? = null,
     scrollToStartLabel: String? = null,
     scrollToEndLabel: String? = null,
+    onEdgeChange: ((FastScrollEdge) -> Unit)? = null,
 ): Modifier {
     val target = remember(listState) { ListScrollbarTarget(listState) }
     return scrollbarFor(
         target, edge, contentPadding, minItemsToShow, hasMore, style, label,
-        scrollToStartLabel, scrollToEndLabel,
+        scrollToStartLabel, scrollToEndLabel, onEdgeChange,
     )
 }
 
@@ -350,11 +465,12 @@ fun Modifier.scrollbar(
     label: ScrollbarLabel? = null,
     scrollToStartLabel: String? = null,
     scrollToEndLabel: String? = null,
+    onEdgeChange: ((FastScrollEdge) -> Unit)? = null,
 ): Modifier {
     val target = remember(gridState) { GridScrollbarTarget(gridState) }
     return scrollbarFor(
         target, edge, contentPadding, minItemsToShow, hasMore, style, label,
-        scrollToStartLabel, scrollToEndLabel,
+        scrollToStartLabel, scrollToEndLabel, onEdgeChange,
     )
 }
 
@@ -528,6 +644,9 @@ private const val NO_BASELINE = -1
  */
 private const val HAS_MORE_END_CAP = 0.95f
 
+/** How far a hovered thumb moves toward its pressed look (0 = none, 1 = fully pressed). */
+private const val HOVER_HIGHLIGHT = 0.5f
+
 /** An icon decides the thumb length itself. Returns [NO_LENGTH_OVERRIDE] for the default look. */
 private fun Density.iconMainAxisLength(style: ScrollbarStyle, isVertical: Boolean): Float {
     val icon = style.thumbAppearance as? ThumbAppearance.Icon ?: return NO_LENGTH_OVERRIDE
@@ -621,6 +740,37 @@ private class ScrollbarController(
         if (sizing is ThumbSizing.Proportional && sizing.smoothed) smoothedFraction.value
         else rawFraction
 
+    // Mouse hover. None of this is used for touch.
+    /** True while the mouse is over the bar's strip. Keeps the bar visible, like a drag does. */
+    var stripHovered = false
+        private set
+    private var thumbHovered = false
+    private var thumbHoverJob: Job? = null
+    private var previewJob: Job? = null
+
+    /** 0..1, how highlighted the thumb is because the mouse is over it. */
+    val thumbHover = Animatable(0f)
+
+    /** 0..1, fade of the hover preview bubble. */
+    val previewAmount = Animatable(0f)
+
+    /** Text and center (along the scroll axis) of the hover preview bubble. */
+    var previewLabel by mutableStateOf<String?>(null)
+    var previewCenter by mutableFloatStateOf(0f)
+
+    // Moving the bar to the other edge (opt-in, touch only).
+    /** True while the thumb is picked up and follows the finger across. */
+    var movingEdge by mutableStateOf(false)
+        private set
+
+    /** Center of the thumb across the scroll axis while it is picked up. */
+    var moveCrossCenter by mutableFloatStateOf(0f)
+
+    /** 0 = at the drop position, 1 = settled at its edge. Animates after a drop. */
+    val edgeSnap = Animatable(1f)
+    private var edgeSnapFrom = 0f // read together with edgeSnap, which drives the redraws
+    private var edgeSnapJob: Job? = null
+
     private val events = Channel<Unit>(Channel.CONFLATED)
     private var fadeJob: Job? = null
     private var lastScrollOffset = Int.MIN_VALUE
@@ -650,8 +800,8 @@ private class ScrollbarController(
             fade.animateTo(1f, tween(style.fadeInDuration.inWholeMilliseconds.toInt()))
             while (true) {
                 events.tryReceive() // drop stale events
-                if (dragging) {
-                    // Held: stay visible until the drag ends and sends an event.
+                if (dragging || stripHovered) {
+                    // Held or hovered: stay visible until that ends and sends an event.
                     events.receiveCatching().getOrNull() ?: return@launch
                     continue
                 }
@@ -660,7 +810,9 @@ private class ScrollbarController(
                 }
                 if (next == null) break
             }
-            if (!dragging) fade.animateTo(0f, tween(style.fadeOutDuration.inWholeMilliseconds.toInt()))
+            if (!dragging && !stripHovered) {
+                fade.animateTo(0f, tween(style.fadeOutDuration.inWholeMilliseconds.toInt()))
+            }
         }
     }
 
@@ -706,6 +858,75 @@ private class ScrollbarController(
         lastDrawnProgress = shownProgress
     }
 
+    fun setStripHovered(hovered: Boolean) {
+        if (hovered == stripHovered) return
+        stripHovered = hovered
+        signalActivity() // shows the bar on enter, restarts the hide delay on exit
+    }
+
+    fun setThumbHovered(hovered: Boolean) {
+        if (hovered == thumbHovered) return
+        thumbHovered = hovered
+        thumbHoverJob?.cancel()
+        thumbHoverJob = scope.launch { thumbHover.animateTo(if (hovered) 1f else 0f, tween(120)) }
+    }
+
+    /** Shows the preview bubble, or hides it when [text] is null. Animates only on a change. */
+    fun setPreview(text: String?, center: Float) {
+        if (text == null) {
+            hidePreview()
+            return
+        }
+        previewLabel = text
+        previewCenter = center
+        if (previewAmount.targetValue != 1f) {
+            previewJob?.cancel()
+            previewJob = scope.launch { previewAmount.animateTo(1f, tween(120)) }
+        }
+    }
+
+    fun hidePreview() {
+        if (previewAmount.targetValue == 0f) return
+        previewJob?.cancel()
+        previewJob = scope.launch { previewAmount.animateTo(0f, tween(120)) }
+    }
+
+    /** Cheap to call repeatedly: every setter returns early when nothing changes. */
+    fun endHover() {
+        setStripHovered(false)
+        setThumbHovered(false)
+        hidePreview()
+    }
+
+    fun beginEdgeMove(center: Float) {
+        edgeSnapJob?.cancel()
+        edgeSnapJob = scope.launch(start = CoroutineStart.UNDISPATCHED) { edgeSnap.snapTo(1f) }
+        moveCrossCenter = center
+        label = null // the bubble would sit on the wrong side while moving
+        movingEdge = true
+    }
+
+    /** Glides the thumb from where it was dropped to its edge (new or unchanged). */
+    fun endEdgeMove() {
+        if (!movingEdge) return
+        edgeSnapFrom = moveCrossCenter
+        edgeSnapJob?.cancel()
+        // UNDISPATCHED so the snap starts at the drop position on the very next frame.
+        edgeSnapJob = scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            edgeSnap.snapTo(0f)
+            edgeSnap.animateTo(1f, spring(stiffness = Spring.StiffnessMediumLow))
+        }
+        movingEdge = false
+    }
+
+    /** Where the thumb is drawn across the scroll axis, given where it rests at its edge. */
+    fun displayedCrossStart(restingCrossStart: Float, thumbCrossLength: Float): Float {
+        if (movingEdge) return moveCrossCenter - thumbCrossLength / 2f
+        val snap = edgeSnap.value
+        if (snap >= 1f) return restingCrossStart
+        return lerp(edgeSnapFrom - thumbCrossLength / 2f, restingCrossStart, snap)
+    }
+
     fun beginDrag(progress: Float) {
         glideJob?.cancel()
         glideJob = scope.launch(start = CoroutineStart.UNDISPATCHED) { glide.snapTo(0f) }
@@ -732,6 +953,9 @@ private class ScrollbarController(
     fun close() {
         fadeJob?.cancel()
         glideJob?.cancel()
+        thumbHoverJob?.cancel()
+        previewJob?.cancel()
+        edgeSnapJob?.cancel()
         fadeJob = null
         events.close()
     }
@@ -799,6 +1023,7 @@ private class ScrollbarConfig(
     val layoutDirection: LayoutDirection,
     val label: ScrollbarLabel?,
     val hasMore: Boolean,
+    val onEdgeChange: ((FastScrollEdge) -> Unit)?,
 ) {
     /** Largest thumb progress. Below 1 while more items can still load. */
     val endCap: Float get() = if (hasMore) HAS_MORE_END_CAP else 1f
@@ -807,6 +1032,12 @@ private class ScrollbarConfig(
     fun isCrossAxisAtOrigin(isVertical: Boolean): Boolean =
         if (isVertical) (edge == FastScrollEdge.START) == (layoutDirection == LayoutDirection.Ltr)
         else edge == FastScrollEdge.START
+
+    /** The edge whose side is the left (vertical) or top (horizontal) when [atOrigin]. */
+    fun edgeAt(isVertical: Boolean, atOrigin: Boolean): FastScrollEdge {
+        val start = if (isVertical) atOrigin == (layoutDirection == LayoutDirection.Ltr) else atOrigin
+        return if (start) FastScrollEdge.START else FastScrollEdge.END
+    }
 
     /** True when scroll progress runs against the physical axis (reverseLayout, or RTL rows). */
     fun isMirrored(target: ScrollbarTarget): Boolean =
@@ -819,6 +1050,91 @@ private class ScrollbarConfig(
     fun mainAxisEndPadding(isVertical: Boolean): Dp =
         (if (isVertical) contentPadding.calculateBottomPadding()
         else contentPadding.calculateRightPadding(layoutDirection)) + style.trackPadding
+}
+
+// INPUT HELPERS: shared by touch, mouse press and mouse hover, so they agree on where the thumb is.
+
+/** True when [crossPosition] is inside the strip along the bar's edge that accepts input. */
+private fun Density.isInBarStrip(
+    config: ScrollbarConfig,
+    isVertical: Boolean,
+    crossLength: Float,
+    crossPosition: Float,
+): Boolean {
+    val style = config.style
+    // An icon wider than the touch target must still be grabbable across its whole width.
+    val iconCrossExtent = (style.thumbAppearance as? ThumbAppearance.Icon)
+        ?.let { icon ->
+            (if (isVertical) icon.size.width else icon.size.height).toPx() + style.edgePadding.toPx()
+        } ?: 0f
+    val thickness = max(style.touchTargetThickness.toPx(), iconCrossExtent)
+    return if (config.isCrossAxisAtOrigin(isVertical)) crossPosition <= thickness
+    else crossPosition >= crossLength - thickness
+}
+
+/** Size of the thumb across the scroll axis: the capsule, or the icon. */
+private fun Density.crossLengthOfThumb(style: ScrollbarStyle, isVertical: Boolean): Float =
+    when (val appearance = style.thumbAppearance) {
+        is ThumbAppearance.Icon ->
+            (if (isVertical) appearance.size.width else appearance.size.height).toPx()
+        ThumbAppearance.Bar -> style.pressedThumbThickness.toPx() // room to widen in place
+        ThumbAppearance.Default -> style.capsuleThickness.toPx()
+    }
+
+/** Where the thumb rests across the scroll axis, at its edge. */
+private fun Density.restingCrossStart(
+    config: ScrollbarConfig,
+    isVertical: Boolean,
+    crossLength: Float,
+    thumbCrossLength: Float,
+): Float =
+    if (config.isCrossAxisAtOrigin(isVertical)) config.style.edgePadding.toPx()
+    else crossLength - thumbCrossLength - config.style.edgePadding.toPx()
+
+/**
+ * Lays out the thumb where it is drawn right now, into [metrics] and [geometry]. Returns false
+ * when no thumb is drawn (too few items, nothing to scroll, or no room for a track).
+ */
+private fun Density.layoutThumbForInput(
+    target: ScrollbarTarget,
+    config: ScrollbarConfig,
+    controller: ScrollbarController,
+    metrics: ScrollMetrics,
+    geometry: ThumbGeometry,
+    isVertical: Boolean,
+    containerLength: Float,
+): Boolean {
+    if (!metrics.update(target) || metrics.itemCount <= config.minItemsToShow) return false
+    // Nothing to scroll means nothing is drawn, so nothing may be grabbed either. This matters
+    // in Always mode, where the bar's alpha stays at 1.
+    if (metrics.contentLength <= metrics.viewportLength) return false
+    val style = config.style
+    geometry.set(
+        density = this,
+        containerLength = containerLength,
+        startPadding = config.mainAxisStartPadding(isVertical).toPx(),
+        endPadding = config.mainAxisEndPadding(isVertical).toPx(),
+        sizing = style.thumbSizing,
+        fraction = controller.displayedFraction(style.thumbSizing, metrics.thumbFraction),
+        visualProgress = visualProgress(metrics.progress * config.endCap, config.isMirrored(target)),
+        lengthOverride = iconMainAxisLength(style, isVertical),
+    )
+    return geometry.trackLength > 0f
+}
+
+/**
+ * Thumb position (0..endCap) when the thumb is centered on [mainPosition]. Mouse track clicks
+ * and the hover preview both use it, so a click lands exactly where the preview pointed.
+ */
+private fun centeredProgress(
+    geometry: ThumbGeometry,
+    startPadding: Float,
+    mainPosition: Float,
+    isMirrored: Boolean,
+): Float {
+    val onScreen = ((mainPosition - geometry.length / 2f - startPadding) / geometry.trackLength)
+        .coerceIn(0f, 1f)
+    return visualProgress(onScreen, isMirrored)
 }
 
 // MODIFIER
@@ -835,13 +1151,16 @@ private fun Modifier.scrollbarFor(
     // Accessibility labels
     scrollToStartLabel: String?,
     scrollToEndLabel: String?,
+    onEdgeChange: ((FastScrollEdge) -> Unit)?,
 ): Modifier {
     val haptics = LocalHapticFeedback.current
     val layoutDirection = LocalLayoutDirection.current
     val scope = rememberCoroutineScope()
     val textMeasurer = rememberTextMeasurer()
 
-    val config = ScrollbarConfig(style, contentPadding, minItemsToShow, edge, layoutDirection, label, hasMore)
+    val config = ScrollbarConfig(
+        style, contentPadding, minItemsToShow, edge, layoutDirection, label, hasMore, onEdgeChange,
+    )
     val latestConfig by rememberUpdatedState(config)
 
     val controller = remember(scope) { ScrollbarController(scope, style) }
@@ -912,64 +1231,49 @@ private fun Modifier.scrollbarFor(
             if (controller.fade.value < 0.05f) return@awaitEachGesture
 
             val currentConfig = latestConfig
-            val currentStyle = currentConfig.style
             val isVertical = target.isVertical
             val crossLength = (if (isVertical) size.width else size.height).toFloat()
-
-            // Cheapest check first: most touches on the list are nowhere near the bar, and they
-            // must not pay for the metrics below (which allocate for grids).
-            // An icon wider than the touch target must still be grabbable across its whole width.
-            val iconCrossExtent = (currentStyle.thumbAppearance as? ThumbAppearance.Icon)
-                ?.let { icon ->
-                    (if (isVertical) icon.size.width else icon.size.height).toPx() +
-                            currentStyle.edgePadding.toPx()
-                } ?: 0f
-            val touchThickness = max(currentStyle.touchTargetThickness.toPx(), iconCrossExtent)
             val downMain = if (isVertical) down.position.y else down.position.x
             val downCross = if (isVertical) down.position.x else down.position.y
-            val insideCrossAxis =
-                if (currentConfig.isCrossAxisAtOrigin(isVertical)) downCross <= touchThickness
-                else downCross >= crossLength - touchThickness
-            if (!insideCrossAxis) return@awaitEachGesture
+
+            // Cheapest check first: most touches on the list are nowhere near the bar, and they
+            // must not pay for the metrics below.
+            if (!isInBarStrip(currentConfig, isVertical, crossLength, downCross)) {
+                return@awaitEachGesture
+            }
+
+            // Mouse: only the primary button grabs. Touch never takes this branch.
+            val isMouse = down.type == PointerType.Mouse
+            if (isMouse && !currentEvent.buttons.isPrimaryPressed) return@awaitEachGesture
 
             val endCap = currentConfig.endCap
             val metrics = controller.frozen
-            if (!metrics.update(target) || metrics.itemCount <= currentConfig.minItemsToShow) {
+            val geometry = controller.grabGeometry
+            val containerLength = (if (isVertical) size.height else size.width).toFloat()
+            if (!layoutThumbForInput(
+                    target, currentConfig, controller, metrics, geometry, isVertical, containerLength,
+                )
+            ) {
                 return@awaitEachGesture
             }
-            // Nothing to scroll means nothing is drawn, so nothing may be grabbed either. This
-            // matters in Always mode, where the bar's alpha stays at 1.
-            if (metrics.contentLength <= metrics.viewportLength) return@awaitEachGesture
-
             val isMirrored = currentConfig.isMirrored(target)
             val startPadding = currentConfig.mainAxisStartPadding(isVertical).toPx()
-            val endPadding = currentConfig.mainAxisEndPadding(isVertical).toPx()
-            val containerLength = (if (isVertical) size.height else size.width).toFloat()
-
-            val sizing = currentStyle.thumbSizing
-            val shownFraction = controller.displayedFraction(sizing, metrics.thumbFraction)
-            val geometry = controller.grabGeometry
-            geometry.set(
-                density = this,
-                containerLength = containerLength,
-                startPadding = startPadding,
-                endPadding = endPadding,
-                sizing = sizing,
-                fraction = shownFraction,
-                visualProgress = visualProgress(metrics.progress * endCap, isMirrored),
-                lengthOverride = this.iconMainAxisLength(currentStyle, isVertical),
-            )
             val trackLength = geometry.trackLength
-            if (trackLength <= 0f) return@awaitEachGesture
+            val shownFraction =
+                controller.displayedFraction(currentConfig.style.thumbSizing, metrics.thumbFraction)
 
-            val insideMainAxis =
+            val onThumb =
                 downMain in (geometry.start - slop)..(geometry.start + geometry.length + slop)
 
-            // Not on the thumb: consume nothing, the list handles it.
-            if (!insideMainAxis) return@awaitEachGesture
+            // Touch off the thumb: consume nothing, the list handles it. A mouse click on the
+            // track jumps there instead and then drags like a grab.
+            if (!onThumb && !isMouse) return@awaitEachGesture
 
-            // Keep the finger's position inside the thumb so it never jumps.
-            var grabOffset = (downMain - geometry.start).coerceIn(0f, geometry.length)
+            // On the thumb, keep the finger's position inside it so it never jumps. On the
+            // track, center the thumb under the cursor (same mapping as the hover preview).
+            var grabOffset =
+                if (onThumb) (downMain - geometry.start).coerceIn(0f, geometry.length)
+                else geometry.length / 2f
 
             /** Thumb position (0..endCap) for a finger position. Not yet divided by [endCap]. */
             fun progressAt(mainPosition: Float): Float {
@@ -978,24 +1282,40 @@ private fun Modifier.scrollbarFor(
                 return visualProgress(onScreen, isMirrored)
             }
 
+            val startProgress =
+                if (onThumb) metrics.progress * endCap
+                else centeredProgress(geometry, startPadding, downMain, isMirrored)
+
             val labelConfig = currentConfig.label
             var lastLabelIndex = Int.MIN_VALUE
             var countWatcher: Job? = null
             try {
                 controller.frozenFraction = shownFraction
+                controller.endHover() // a press replaces any hover preview
                 if (labelConfig != null) {
-                    lastLabelIndex = keyIndex(scrollTargetKey(metrics, metrics.progress))
+                    lastLabelIndex = keyIndex(
+                        scrollTargetKey(metrics, (startProgress / endCap).coerceIn(0f, 1f)),
+                    )
                     controller.label = labelConfig.provider(lastLabelIndex)
                 } else {
                     controller.label = null
                 }
-                controller.beginDrag(metrics.progress * endCap)
-                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                controller.beginDrag(startProgress)
+                if (!isMouse) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 down.consume()
                 scope.launch { target.state.stopScroll() } // cancel any running fling
 
                 var lastKey = Long.MIN_VALUE
                 var lastMainPosition = downMain
+
+                // Track click: jump right away, before the mouse moves.
+                if (!onThumb) {
+                    lastKey = target.scrollToProgress(
+                        metrics,
+                        (startProgress / endCap).coerceIn(0f, 1f),
+                        lastKey,
+                    )
+                }
 
                 // The item count changed mid-drag (a page loaded, items were prepended). Refresh
                 // the metrics and continue from where the list really is, with the finger kept
@@ -1018,8 +1338,34 @@ private fun Modifier.scrollbarFor(
                     }
                 }
 
+                // Edge move: a long press on the thumb without moving picks it up. Moving first
+                // makes it a normal drag for the rest of the gesture.
+                val edgeMoveEnabled = currentConfig.onEdgeChange != null && onThumb && !isMouse
+                val grabMark = TimeSource.Monotonic.markNow()
+                val longPressMillis = viewConfiguration.longPressTimeoutMillis
+                val touchSlop = viewConfiguration.touchSlop
+                var movedSinceDown = false
+                val crossThumbLength = crossLengthOfThumb(currentConfig.style, isVertical)
+                val restingCenter = restingCrossStart(
+                    currentConfig, isVertical, crossLength, crossThumbLength,
+                ) + crossThumbLength / 2f
+
                 while (true) {
-                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                    val waitingForLongPress =
+                        edgeMoveEnabled && !movedSinceDown && !controller.movingEdge
+                    val event = if (waitingForLongPress) {
+                        val remaining = longPressMillis - grabMark.elapsedNow().inWholeMilliseconds
+                        if (remaining <= 0L) null
+                        else withTimeoutOrNull(remaining) { awaitPointerEvent(PointerEventPass.Initial) }
+                    } else {
+                        awaitPointerEvent(PointerEventPass.Initial)
+                    }
+                    if (event == null) {
+                        // Held still long enough: pick the thumb up.
+                        controller.beginEdgeMove(restingCenter)
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        continue
+                    }
                     var change: PointerInputChange? = null
                     for (changeIndex in event.changes.indices) {
                         if (event.changes[changeIndex].id == down.id) {
@@ -1030,7 +1376,30 @@ private fun Modifier.scrollbarFor(
                     if (change == null) break
                     if (!change.pressed) {
                         change.consume()
+                        if (controller.movingEdge) {
+                            // Dropped: the nearest edge wins. The app stores it and passes it
+                            // back as `edge`; until then the thumb glides toward the old edge.
+                            val newEdge = currentConfig.edgeAt(
+                                isVertical,
+                                atOrigin = controller.moveCrossCenter < crossLength / 2f,
+                            )
+                            controller.endEdgeMove()
+                            if (newEdge != currentConfig.edge) currentConfig.onEdgeChange?.invoke(newEdge)
+                        }
                         break
+                    }
+                    if (!movedSinceDown && (change.position - down.position).getDistance() > touchSlop) {
+                        movedSinceDown = true
+                    }
+                    if (controller.movingEdge) {
+                        // Picked up: follow the finger across, no scrolling.
+                        val cross = if (isVertical) change.position.x else change.position.y
+                        val halfThumb = crossThumbLength / 2f
+                        controller.moveCrossCenter = (restingCenter + cross - downCross)
+                            .coerceAtLeast(halfThumb)
+                            .coerceAtMost((crossLength - halfThumb).coerceAtLeast(halfThumb))
+                        change.consume()
+                        continue
                     }
                     val mainPosition = if (isVertical) change.position.y else change.position.x
                     lastMainPosition = mainPosition
@@ -1047,7 +1416,7 @@ private fun Modifier.scrollbarFor(
                             lastLabelIndex = labelIndex
                             val newText = labelConfig.provider(labelIndex)
                             if (newText != controller.label) {
-                                if (labelConfig.sectionHaptics && newText != null) {
+                                if (labelConfig.sectionHaptics && newText != null && !isMouse) {
                                     haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
                                 }
                                 controller.label = newText
@@ -1059,10 +1428,90 @@ private fun Modifier.scrollbarFor(
             } finally {
                 // Runs on lift, cancel, and pointer-input restart, so no stuck state.
                 countWatcher?.cancel()
+                controller.endEdgeMove() // canceled while picked up: glide back
                 controller.endDrag()
             }
         }
     }
+    // Mouse hover: reveal, thumb highlight and track preview. Watches events without consuming
+    // any, so wheel and trackpad scrolling and the list's own hover handling are unaffected.
+    // Touch events only reach endHover(), which returns early when nothing is hovered.
+    val hoverModifier = Modifier.pointerInput(target) {
+        val hoverMetrics = ScrollMetrics()
+        val hoverGeometry = ThumbGeometry()
+        awaitPointerEventScope {
+            var lastPreviewIndex = Int.MIN_VALUE
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                val change = event.changes.firstOrNull() ?: continue
+                val isMouseHover = change.type == PointerType.Mouse && !change.pressed
+                if (!isMouseHover || event.type == PointerEventType.Exit || controller.dragging) {
+                    controller.endHover()
+                    lastPreviewIndex = Int.MIN_VALUE
+                    continue
+                }
+                // Scroll events count too: the thumb moves under a resting cursor.
+                if (event.type != PointerEventType.Move &&
+                    event.type != PointerEventType.Enter &&
+                    event.type != PointerEventType.Scroll
+                ) {
+                    continue
+                }
+
+                val config = latestConfig
+                val isVertical = target.isVertical
+                val crossLength = (if (isVertical) size.width else size.height).toFloat()
+                val main = if (isVertical) change.position.y else change.position.x
+                val cross = if (isVertical) change.position.x else change.position.y
+                if (!isInBarStrip(config, isVertical, crossLength, cross)) {
+                    controller.endHover()
+                    lastPreviewIndex = Int.MIN_VALUE
+                    continue
+                }
+                controller.setStripHovered(true)
+
+                val containerLength = (if (isVertical) size.height else size.width).toFloat()
+                if (!layoutThumbForInput(
+                        target, config, controller, hoverMetrics, hoverGeometry,
+                        isVertical, containerLength,
+                    )
+                ) {
+                    controller.setThumbHovered(false)
+                    controller.hidePreview()
+                    lastPreviewIndex = Int.MIN_VALUE
+                    continue
+                }
+
+                val onThumb = main in hoverGeometry.start..(hoverGeometry.start + hoverGeometry.length)
+                controller.setThumbHovered(onThumb)
+
+                val labelConfig = config.label
+                if (onThumb || labelConfig == null) {
+                    controller.hidePreview()
+                    lastPreviewIndex = Int.MIN_VALUE
+                    continue
+                }
+                val startPadding = config.mainAxisStartPadding(isVertical).toPx()
+                val isMirrored = config.isMirrored(target)
+                val shown = centeredProgress(hoverGeometry, startPadding, main, isMirrored)
+                val index = keyIndex(
+                    scrollTargetKey(hoverMetrics, (shown / config.endCap).coerceIn(0f, 1f)),
+                )
+                // Center of the thumb if it were moved here, so the bubble clamps at the ends
+                // exactly like the thumb would.
+                val center = startPadding +
+                        hoverGeometry.trackLength * visualProgress(shown, isMirrored) +
+                        hoverGeometry.length / 2f
+                if (index != lastPreviewIndex) {
+                    lastPreviewIndex = index
+                    controller.setPreview(labelConfig.provider(index), center)
+                } else if (controller.previewLabel != null) {
+                    controller.previewCenter = center
+                }
+            }
+        }
+    }
+
     val accessibilityModifier = remember(target, scrollToStartLabel, scrollToEndLabel) {
         val actions = listOfNotNull(
             scrollToStartLabel?.let { label ->
@@ -1084,6 +1533,7 @@ private fun Modifier.scrollbarFor(
     return this
         .then(accessibilityModifier)
         .then(pointerModifier)
+        .then(hoverModifier)
         .drawWithContent {
             drawContent()
 
@@ -1148,47 +1598,65 @@ private fun Modifier.scrollbarFor(
             if (geometry.length <= 0f) return@drawWithContent
 
             val pressed = controller.press.value
+            // Hovering the thumb with a mouse shows part of the pressed look.
+            val highlight = max(pressed, controller.thumbHover.value * HOVER_HIGHLIGHT)
             val atOrigin = config.isCrossAxisAtOrigin(isVertical)
             val appearance = style.thumbAppearance
 
             // Where the thumb sits across the scroll axis, shared by both looks and the label.
-            val thumbCrossLength: Float
-            val thumbCrossStart: Float
+            // While it is picked up or snapping to an edge, it follows that instead.
+            val thumbCrossLength = crossLengthOfThumb(style, isVertical)
+            val thumbCrossStart = controller.displayedCrossStart(
+                restingCrossStart = restingCrossStart(config, isVertical, crossLength, thumbCrossLength),
+                thumbCrossLength = thumbCrossLength,
+            )
 
-            if (appearance is ThumbAppearance.Icon) {
-                thumbCrossLength =
-                    (if (isVertical) appearance.size.width else appearance.size.height).toPx()
-                thumbCrossStart =
-                    if (atOrigin) style.edgePadding.toPx()
-                    else crossLength - thumbCrossLength - style.edgePadding.toPx()
-                drawThumbIcon(
-                    icon = appearance,
-                    isVertical = isVertical,
-                    geometry = geometry,
-                    crossStart = thumbCrossStart,
-                    alpha = alpha,
-                    pressed = pressed,
-                )
-            } else {
-                thumbCrossLength = style.capsuleThickness.toPx()
-                thumbCrossStart =
-                    if (atOrigin) style.edgePadding.toPx()
-                    else crossLength - thumbCrossLength - style.edgePadding.toPx()
-                drawScrollbar(
-                    isVertical = isVertical,
-                    geometry = geometry,
-                    alpha = alpha,
-                    thumbColor = lerpColor(style.thumbColor, style.pressedThumbColor, pressed),
-                    thumbThickness = lerp(
-                        style.thumbThickness.toPx(),
-                        style.pressedThumbThickness.toPx(),
-                        pressed,
-                    ),
-                    capsuleCrossStart = thumbCrossStart,
-                    capsuleThickness = thumbCrossLength,
-                    capsuleExtraLength = style.capsuleExtraLength.toPx(),
-                    capsuleColor = style.capsuleColor,
-                )
+            when (appearance) {
+                is ThumbAppearance.Icon -> {
+                    drawThumbIcon(
+                        icon = appearance,
+                        isVertical = isVertical,
+                        geometry = geometry,
+                        crossStart = thumbCrossStart,
+                        alpha = alpha,
+                        pressed = pressed,
+                        highlight = highlight,
+                    )
+                }
+
+                ThumbAppearance.Bar -> {
+                    drawBar(
+                        isVertical = isVertical,
+                        geometry = geometry,
+                        alpha = alpha,
+                        color = lerpColor(style.thumbColor, style.pressedThumbColor, highlight),
+                        thickness = lerp(
+                            style.thumbThickness.toPx(),
+                            style.pressedThumbThickness.toPx(),
+                            highlight,
+                        ),
+                        slotCrossStart = thumbCrossStart,
+                        slotThickness = thumbCrossLength,
+                    )
+                }
+
+                else -> {
+                    drawScrollbar(
+                        isVertical = isVertical,
+                        geometry = geometry,
+                        alpha = alpha,
+                        thumbColor = lerpColor(style.thumbColor, style.pressedThumbColor, highlight),
+                        thumbThickness = lerp(
+                            style.thumbThickness.toPx(),
+                            style.pressedThumbThickness.toPx(),
+                            highlight,
+                        ),
+                        capsuleCrossStart = thumbCrossStart,
+                        capsuleThickness = thumbCrossLength,
+                        capsuleExtraLength = style.capsuleExtraLength.toPx(),
+                        capsuleColor = style.capsuleColor,
+                    )
+                }
             }
 
             // The bubble follows the press animation, so it fades in on grab and out on release.
@@ -1207,6 +1675,27 @@ private fun Modifier.scrollbarFor(
                     thumbAtOrigin = atOrigin,
                     alpha = alpha * pressed,
                 )
+            }
+
+            // Mouse hover preview: the label for the hovered track position, where a click jumps.
+            if (label != null && !controller.dragging) {
+                val previewText = controller.previewLabel
+                val previewAmount = controller.previewAmount.value
+                if (previewText != null && previewAmount > 0f) {
+                    drawLabelBubble(
+                        textMeasurer = textMeasurer,
+                        layoutCache = controller.labelLayoutCache,
+                        text = previewText,
+                        labelStyle = label.style,
+                        isVertical = isVertical,
+                        thumbStart = controller.previewCenter,
+                        thumbLength = 0f,
+                        thumbCrossStart = thumbCrossStart,
+                        thumbCrossLength = thumbCrossLength,
+                        thumbAtOrigin = atOrigin,
+                        alpha = alpha * previewAmount,
+                    )
+                }
             }
         }
 }
@@ -1228,6 +1717,7 @@ private fun DrawScope.drawThumbIcon(
     crossStart: Float,
     alpha: Float,
     pressed: Float,
+    highlight: Float,
 ) {
     val iconWidth = icon.size.width.toPx()
     val iconHeight = icon.size.height.toPx()
@@ -1235,7 +1725,7 @@ private fun DrawScope.drawThumbIcon(
     val mainStart = geometry.start + (geometry.length - mainLength) / 2f
     val topLeft = pointOf(isVertical, mainStart, crossStart)
     val iconSize = Size(iconWidth, iconHeight)
-    val scale = lerp(1f, icon.draggingScale, pressed)
+    val scale = lerp(1f, icon.draggingScale, highlight) // grows a little on hover too
 
     withTransform({
         translate(left = topLeft.x, top = topLeft.y)
@@ -1325,6 +1815,26 @@ private fun DrawScope.drawLabelBubble(
         textLayoutResult = layout,
         color = labelStyle.textColor,
         topLeft = Offset(topLeft.x + horizontalPadding, topLeft.y + verticalPadding),
+        alpha = alpha,
+    )
+}
+
+/** A single rounded bar, centered in its slot so it widens in place. */
+private fun DrawScope.drawBar(
+    isVertical: Boolean,
+    geometry: ThumbGeometry,
+    alpha: Float,
+    color: Color,
+    thickness: Float,
+    slotCrossStart: Float,
+    slotThickness: Float,
+) {
+    val crossStart = slotCrossStart + (slotThickness - thickness) / 2f
+    drawRoundRect(
+        color = color,
+        topLeft = pointOf(isVertical, geometry.start, crossStart),
+        size = sizeOf(isVertical, geometry.length, thickness),
+        cornerRadius = CornerRadius(thickness / 2f),
         alpha = alpha,
     )
 }

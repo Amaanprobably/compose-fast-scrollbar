@@ -18,7 +18,7 @@ dependencies {
 compose.desktop {
     application {
         mainClass = "com.amaanqureshi.scrollbar.MainKt"
-
+        jvmArgs += "--enable-native-access=ALL-UNNAMED"
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "com.amaanqureshi.scrollbar"

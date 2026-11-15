@@ -15,6 +15,7 @@ A draggable fast scrollbar for Compose Multiplatform lazy layouts. One modifier,
 - Optional label bubble next to the thumb while dragging (a letter, date or section name), with a haptic tick when you cross into a new section.
 - Fully styleable: thickness, colors, timings and edge placement.
 - Use your own brand icon or logo as the thumb, with separate idle and dragging icons.
+- Mouse support (desktop, and mice on Android and iPad): hovering reveals the bar and highlights the thumb, hovering the track previews the label for that spot, and clicking the track jumps there. Wheel and trackpad scrolling always reach the list, and touch behavior is unchanged.
 - No recomposition while scrolling or dragging. All state is read in the draw phase.
 
 ## Installation
@@ -92,6 +93,18 @@ Modifier.scrollbar(listState, hasMore = hasMore)
 
 While `hasMore` is `true`, the thumb stops short of the very end, and dragging to the bottom jumps to the last loaded item. If a page loads while you are dragging, the drag continues into the new content. When `hasMore` becomes `false`, the thumb glides to the end. Item count changes (pagination, prepended messages) glide the thumb instead of snapping it. If your list uses Paging placeholders, the total is already known and you don't need `hasMore`.
 
+### Movable bar
+
+Let users move the bar to the other side, which helps left-handed and one-handed use. Long-press the thumb without moving, drag it across, and it snaps to the nearest edge:
+
+```kotlin
+var edge by rememberSaveable { mutableStateOf(FastScrollEdge.END) }
+
+Modifier.scrollbar(listState, edge = edge, onEdgeChange = { edge = it })
+```
+
+Store the edge wherever you keep settings. It's touch only, and off unless you pass `onEdgeChange`.
+
 ### Always-visible bar
 
 ```kotlin
@@ -142,6 +155,16 @@ Modifier.scrollbar(
 )
 ```
 
+The look follows the platform: a single thin bar on desktop, a finger-sized capsule with a thumb inside on Android and iOS. Pick a look yourself with `thumbAppearance`:
+
+| Appearance                  | Look                                                                        |
+|-----------------------------|-----------------------------------------------------------------------------|
+| `ThumbAppearance.Default`   | Translucent capsule with a thin thumb inside. The touch default.            |
+| `ThumbAppearance.Bar`       | One rounded bar, no capsule. The desktop default. Widens on hover and drag. |
+| `ThumbAppearance.Icon(...)` | Your own icon or logo.                                                      |
+
+`ScrollbarDefaults.compactStyle()` gives the full desktop look (thin bar, mouse-sized grab area) everywhere. For a plain bar with a finger-sized grab area on mobile, use `style(thumbAppearance = ThumbAppearance.Bar)`.
+
 Using Material3? Pass your theme colors:
 
 ```kotlin
@@ -168,6 +191,7 @@ ScrollbarDefaults.style(
 | `style`              | `ScrollbarDefaults.style()` | Sizes, colors, timings and the thumb appearance.                                                                |
 | `hasMore`            | `false`                     | `true` for feeds that load more as you scroll. See above.                                                       |
 | `label`              | `null`                      | Bubble shown next to the thumb while dragging. See above.                                                       |
+| `onEdgeChange`       | `null`                      | Long-press and drag the thumb across to move the bar to the other edge. See above.                              |
 | `scrollToStartLabel` | `null`                      | Accessibility label for a "scroll to start" action. No action is added when `null`.                             |
 | `scrollToEndLabel`   | `null`                      | Accessibility label for a "scroll to end" action. No action is added when `null`.                               |
 
@@ -178,7 +202,8 @@ ScrollbarDefaults.style(
 
 ## Roadmap
 
-- Desktop mouse support: hover reveal, hover highlight, track click
+- Fine scrub: move the finger sideways to drag the thumb slower, for precise landing (opt-in)
+- Overscroll squash at the ends
 - TalkBack and VoiceOver actions
 
 ## Project structure

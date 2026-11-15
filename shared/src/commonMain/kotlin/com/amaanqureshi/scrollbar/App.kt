@@ -26,8 +26,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -39,14 +39,15 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import io.github.amaanprobably.scrollbar.ScrollbarDefaults
-import io.github.amaanprobably.scrollbar.ScrollbarLabel
-import io.github.amaanprobably.scrollbar.ScrollbarVisibility
-import io.github.amaanprobably.scrollbar.scrollbar
+import io.github.amaanprobably.scrollbar.*
 import kotlinx.coroutines.delay
-import kotlin.time.Duration.Companion.milliseconds
 
-private enum class Demo(val title: String) { Column("Column"), Grid("Grid"), Row("Row"), Feed("Feed") }
+private enum class Demo(val title: String) {
+    Column("Column"),
+    Grid("Grid"),
+    Row("Row"),
+    Feed("Feed")
+}
 
 private val itemCountOptions = listOf(5, 50, 10_000)
 
@@ -71,6 +72,9 @@ fun App() {
         var alwaysVisible by remember { mutableStateOf(false) }
         var showLabel by remember { mutableStateOf(true) }
         var shortContainer by remember { mutableStateOf(false) }
+        // Long-press the thumb and drag it across to move the bar. A real app would persist this.
+        var edge by remember { mutableStateOf(FastScrollEdge.END) }
+        val onEdgeChange: (FastScrollEdge) -> Unit = { edge = it }
 
         val layoutDirection = if (rightToLeft) LayoutDirection.Rtl else LayoutDirection.Ltr
 
@@ -105,10 +109,10 @@ fun App() {
                     .then(if (shortContainer) Modifier.height(160.dp) else Modifier.weight(1f))
 
                 when (demo) {
-                    Demo.Column -> ColumnDemo(itemCount, reverseLayout, withPadding, style, label, demoModifier)
-                    Demo.Grid -> GridDemo(itemCount, reverseLayout, withPadding, style, label, demoModifier)
-                    Demo.Row -> RowDemo(itemCount, reverseLayout, withPadding, style, label, demoModifier)
-                    Demo.Feed -> FeedDemo(style, demoModifier)
+                    Demo.Column -> ColumnDemo(itemCount, reverseLayout, withPadding, style, label, edge, onEdgeChange, demoModifier)
+                    Demo.Grid -> GridDemo(itemCount, reverseLayout, withPadding, style, label, edge, onEdgeChange, demoModifier)
+                    Demo.Row -> RowDemo(itemCount, reverseLayout, withPadding, style, label, edge, onEdgeChange, demoModifier)
+                    Demo.Feed -> FeedDemo(style, edge, onEdgeChange, demoModifier)
                 }
             }
         }
@@ -175,8 +179,10 @@ private fun ColumnDemo(
     itemCount: Int,
     reverseLayout: Boolean,
     withPadding: Boolean,
-    style: io.github.amaanprobably.scrollbar.ScrollbarStyle,
+    style: ScrollbarStyle,
     label: ScrollbarLabel?,
+    edge: FastScrollEdge,
+    onEdgeChange: (FastScrollEdge) -> Unit,
     modifier: Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -185,7 +191,10 @@ private fun ColumnDemo(
         state = listState,
         reverseLayout = reverseLayout,
         contentPadding = padding,
-        modifier = modifier.scrollbar(listState, contentPadding = padding, style = style, label = label),
+        modifier = modifier.scrollbar(
+            listState, edge = edge, contentPadding = padding, style = style, label = label,
+            onEdgeChange = onEdgeChange,
+        ),
     ) {
         items(itemCount, key = { it }) { index ->
             Cell(
@@ -201,8 +210,10 @@ private fun GridDemo(
     itemCount: Int,
     reverseLayout: Boolean,
     withPadding: Boolean,
-    style: io.github.amaanprobably.scrollbar.ScrollbarStyle,
+    style: ScrollbarStyle,
     label: ScrollbarLabel?,
+    edge: FastScrollEdge,
+    onEdgeChange: (FastScrollEdge) -> Unit,
     modifier: Modifier,
 ) {
     val gridState = rememberLazyGridState()
@@ -212,7 +223,10 @@ private fun GridDemo(
         state = gridState,
         reverseLayout = reverseLayout,
         contentPadding = padding,
-        modifier = modifier.scrollbar(gridState, contentPadding = padding, style = style, label = label),
+        modifier = modifier.scrollbar(
+            gridState, edge = edge, contentPadding = padding, style = style, label = label,
+            onEdgeChange = onEdgeChange,
+        ),
     ) {
         // Full-span header: the awkward case for the items-per-line estimate.
         item(key = "header", span = { GridItemSpan(maxLineSpan) }) {
@@ -235,8 +249,10 @@ private fun RowDemo(
     itemCount: Int,
     reverseLayout: Boolean,
     withPadding: Boolean,
-    style: io.github.amaanprobably.scrollbar.ScrollbarStyle,
+    style: ScrollbarStyle,
     label: ScrollbarLabel?,
+    edge: FastScrollEdge,
+    onEdgeChange: (FastScrollEdge) -> Unit,
     modifier: Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -245,7 +261,10 @@ private fun RowDemo(
         state = listState,
         reverseLayout = reverseLayout,
         contentPadding = padding,
-        modifier = modifier.scrollbar(listState, contentPadding = padding, style = style, label = label),
+        modifier = modifier.scrollbar(
+            listState, edge = edge, contentPadding = padding, style = style, label = label,
+            onEdgeChange = onEdgeChange,
+        ),
     ) {
         items(itemCount, key = { it }) { index ->
             Cell(
@@ -262,7 +281,9 @@ private const val FEED_TOTAL = 300
 /** Simulates an infinite feed: 30 more items arrive 600 ms after you get near the end. */
 @Composable
 private fun FeedDemo(
-    style: io.github.amaanprobably.scrollbar.ScrollbarStyle,
+    style: ScrollbarStyle,
+    edge: FastScrollEdge,
+    onEdgeChange: (FastScrollEdge) -> Unit,
     modifier: Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -274,7 +295,7 @@ private fun FeedDemo(
         snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
             .collect { lastVisible ->
                 if (lastVisible != null && lastVisible >= loadedCount - 5 && loadedCount < FEED_TOTAL) {
-                    delay(600.milliseconds)
+                    delay(600)
                     loadedCount += FEED_PAGE_SIZE
                 }
             }
@@ -282,7 +303,10 @@ private fun FeedDemo(
 
     LazyColumn(
         state = listState,
-        modifier = modifier.scrollbar(listState, hasMore = hasMore, style = style, label = label),
+        modifier = modifier.scrollbar(
+            listState, edge = edge, hasMore = hasMore, style = style, label = label,
+            onEdgeChange = onEdgeChange,
+        ),
     ) {
         items(loadedCount, key = { it }) { index ->
             Cell(
