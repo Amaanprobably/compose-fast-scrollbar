@@ -105,6 +105,8 @@ Modifier.scrollbar(listState, edge = edge, onEdgeChange = { edge = it })
 
 Store the edge wherever you keep settings. It's touch only, and off unless you pass `onEdgeChange`.
 
+While the thumb is picked up, a small two-way arrow appears next to it to show it can be moved across. People won't guess the long press on their own, so mention it somewhere in your app, such as a settings toggle or a one-time tip.
+
 ### Always-visible bar
 
 ```kotlin

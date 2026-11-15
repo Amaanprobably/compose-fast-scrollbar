@@ -186,6 +186,22 @@ class ThumbPlacementTest {
     }
 }
 
+class MoveHintPlacementTest {
+    @Test
+    fun hintSitsOnTheInnerSideOfTheThumb() {
+        // Thumb at the right edge (crossStart 364, 32 wide, list 400): hint goes to its left.
+        assertEquals(364f - 8f - 14f, moveHintCrossCenter(364f, 32f, 400f, hintRadius = 14f, gap = 8f))
+        // Thumb at the left edge: hint goes to its right.
+        assertEquals(4f + 32f + 8f + 14f, moveHintCrossCenter(4f, 32f, 400f, hintRadius = 14f, gap = 8f))
+    }
+
+    @Test
+    fun hintStaysInsideANarrowList() {
+        val center = moveHintCrossCenter(4f, 32f, 50f, hintRadius = 14f, gap = 8f)
+        assertTrue(center in 14f..36f, "center $center must keep the whole circle inside")
+    }
+}
+
 class StyleDefaultsTest {
     @Test
     fun fixedThumbDefaultsTo40Dp() = assertEquals(40.dp, ThumbSizing.Fixed().length)

@@ -33,6 +33,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.withTransform
@@ -644,6 +645,10 @@ private const val NO_BASELINE = -1
  */
 private const val HAS_MORE_END_CAP = 0.95f
 
+/** Move hint shown next to a picked-up thumb: circle radius and its gap from the thumb. */
+private val MOVE_HINT_RADIUS = 14.dp
+private val MOVE_HINT_GAP = 8.dp
+
 /** How far a hovered thumb moves toward its pressed look (0 = none, 1 = fully pressed). */
 private const val HOVER_HIGHLIGHT = 0.5f
 
@@ -770,6 +775,15 @@ private class ScrollbarController(
     val edgeSnap = Animatable(1f)
     private var edgeSnapFrom = 0f // read together with edgeSnap, which drives the redraws
     private var edgeSnapJob: Job? = null
+
+    /** 0..1, fade of the move hint (a two-way arrow) shown while the thumb is picked up. */
+    val moveHint = Animatable(0f)
+    private var moveHintJob: Job? = null
+
+    private fun fadeMoveHint(target: Float) {
+        moveHintJob?.cancel()
+        moveHintJob = scope.launch { moveHint.animateTo(target, tween(150)) }
+    }
 
     private val events = Channel<Unit>(Channel.CONFLATED)
     private var fadeJob: Job? = null
@@ -908,6 +922,7 @@ private class ScrollbarController(
         moveCrossCenter = center
         label = null // the bubble would sit on the wrong side while moving
         movingEdge = true
+        fadeMoveHint(1f)
     }
 
     /** Glides the thumb from where it was dropped to its edge (new or unchanged). */
@@ -921,6 +936,7 @@ private class ScrollbarController(
             edgeSnap.animateTo(1f, spring(stiffness = Spring.StiffnessMediumLow))
         }
         movingEdge = false
+        fadeMoveHint(0f)
     }
 
     /** Where the thumb is drawn across the scroll axis, given where it rests at its edge. */
@@ -960,6 +976,7 @@ private class ScrollbarController(
         thumbHoverJob?.cancel()
         previewJob?.cancel()
         edgeSnapJob?.cancel()
+        moveHintJob?.cancel()
         fadeJob = null
         events.close()
     }
@@ -1094,6 +1111,24 @@ internal fun Density.restingCrossStart(
 ): Float =
     if (config.isCrossAxisAtOrigin(isVertical)) config.style.edgePadding.toPx()
     else crossLength - thumbCrossLength - config.style.edgePadding.toPx()
+
+/**
+ * Center of the move hint across the scroll axis: next to the thumb, on the side with more room
+ * (toward the middle of the list), and kept inside the list.
+ */
+internal fun moveHintCrossCenter(
+    thumbCrossStart: Float,
+    thumbCrossLength: Float,
+    crossLength: Float,
+    hintRadius: Float,
+    gap: Float,
+): Float {
+    val thumbCenter = thumbCrossStart + thumbCrossLength / 2f
+    val center =
+        if (thumbCenter < crossLength / 2f) thumbCrossStart + thumbCrossLength + gap + hintRadius
+        else thumbCrossStart - gap - hintRadius
+    return center.coerceAtLeast(hintRadius).coerceAtMost((crossLength - hintRadius).coerceAtLeast(hintRadius))
+}
 
 /**
  * Lays out the thumb where it is drawn right now, into [metrics] and [geometry]. Returns false
@@ -1684,6 +1719,23 @@ private fun Modifier.scrollbarFor(
                 )
             }
 
+            // Move hint: shows the picked-up thumb can be dragged across to the other edge.
+            val moveHintAmount = controller.moveHint.value
+            if (moveHintAmount > 0f) {
+                val hintRadius = MOVE_HINT_RADIUS.toPx()
+                drawMoveHint(
+                    isVertical = isVertical,
+                    mainCenter = geometry.start + geometry.length / 2f,
+                    crossCenter = moveHintCrossCenter(
+                        thumbCrossStart, thumbCrossLength, crossLength, hintRadius, MOVE_HINT_GAP.toPx(),
+                    ),
+                    radius = hintRadius,
+                    bubbleColor = label?.style?.bubbleColor ?: ScrollbarLabelStyle().bubbleColor,
+                    arrowColor = label?.style?.textColor ?: ScrollbarLabelStyle().textColor,
+                    alpha = alpha * moveHintAmount,
+                )
+            }
+
             // Mouse hover preview: the label for the hovered track position, where a click jumps.
             if (label != null && !controller.dragging) {
                 val previewText = controller.previewLabel
@@ -1824,6 +1876,38 @@ private fun DrawScope.drawLabelBubble(
         topLeft = Offset(topLeft.x + horizontalPadding, topLeft.y + verticalPadding),
         alpha = alpha,
     )
+}
+
+/**
+ * A circle with a two-way arrow across the scroll axis (left-right for vertical lists, up-down for
+ * horizontal ones), because the picked-up thumb can only move that way.
+ */
+private fun DrawScope.drawMoveHint(
+    isVertical: Boolean,
+    mainCenter: Float,
+    crossCenter: Float,
+    radius: Float,
+    bubbleColor: Color,
+    arrowColor: Color,
+    alpha: Float,
+) {
+    val center = pointOf(isVertical, mainCenter, crossCenter)
+    drawCircle(color = bubbleColor, radius = radius, center = center, alpha = alpha)
+
+    val halfArrow = radius * 0.5f
+    val head = radius * 0.25f
+    val stroke = (radius * 0.14f).coerceAtLeast(1f)
+    val startTip = pointOf(isVertical, mainCenter, crossCenter - halfArrow)
+    val endTip = pointOf(isVertical, mainCenter, crossCenter + halfArrow)
+    fun line(from: Offset, to: Offset) =
+        drawLine(arrowColor, from, to, strokeWidth = stroke, cap = StrokeCap.Round, alpha = alpha)
+
+    line(startTip, endTip)
+    // Arrowheads: two short strokes back from each tip.
+    line(startTip, pointOf(isVertical, mainCenter - head, crossCenter - halfArrow + head))
+    line(startTip, pointOf(isVertical, mainCenter + head, crossCenter - halfArrow + head))
+    line(endTip, pointOf(isVertical, mainCenter - head, crossCenter + halfArrow - head))
+    line(endTip, pointOf(isVertical, mainCenter + head, crossCenter + halfArrow - head))
 }
 
 /** A single rounded bar, centered in its slot so it widens in place. */
