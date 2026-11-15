@@ -2,7 +2,7 @@
 
 A draggable fast scrollbar for Compose Multiplatform lazy layouts. One modifier, no wrapper composable, works on Android, iOS and Desktop.
 
-> **Status:** early development. Not published yet, and the iOS and Desktop targets haven't been tested on real devices.
+> **Status:** early development. Not published yet, and the iOS target hasn't been tested on real devices.
 
 ## Features
 
@@ -65,7 +65,7 @@ Notes on icon thumbs:
 
 - `size` is required. It becomes the thumb length along the scroll axis, and the capsule, thickness, color and `ThumbSizing` options are ignored.
 - `dragging` is optional. Leave it out to use one icon for both states.
-- `tint` is off by default, so multi-color logos keep their colors.
+- `tint` is off by default, so multicolor logos keep their colors.
 - The icon is never mirrored or rotated. For right-to-left layouts, set `autoMirror` on a vector if you want it to flip.
 - Use `remember`ed painters (`painterResource` already does this). Animated painters might work but aren't tested yet.
 
@@ -91,7 +91,7 @@ Lists that load more items as you scroll don't have a known end. Tell the scroll
 Modifier.scrollbar(listState, hasMore = hasMore)
 ```
 
-While `hasMore` is `true`, the thumb stops short of the very end, and dragging to the bottom jumps to the last loaded item. If a page loads while you are dragging, the drag continues into the new content. When `hasMore` becomes `false`, the thumb glides to the end. Item count changes (pagination, prepended messages) glide the thumb instead of snapping it. If your list uses Paging placeholders, the total is already known and you don't need `hasMore`.
+While `hasMore` is `true`, the thumb stops short of the very end, and dragging to the bottom jumps to the last loaded item. If a page loads while you are dragging, the drag continues into the new content. When `hasMore` becomes `false`, the thumb glides to the end. Item count changes (pagination, prepended messages) glide the thumb instead of snapping it. If your list uses Paging placeholders, the total is already known, and you don't need `hasMore`.
 
 ### Movable bar
 

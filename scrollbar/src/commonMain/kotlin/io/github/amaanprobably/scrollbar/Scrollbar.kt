@@ -778,11 +778,15 @@ private class ScrollbarController(
 
     /** Fed by a snapshotFlow. Signals activity only on real movement. */
     fun onScrollOffsetChanged(offset: Int) {
-        if (lastScrollOffset == Int.MIN_VALUE) {
-            lastScrollOffset = offset // baseline: don't show just because we attached
-        } else if (offset != lastScrollOffset) {
-            lastScrollOffset = offset
-            signalActivity()
+        when {
+            lastScrollOffset == Int.MIN_VALUE -> {
+                lastScrollOffset = offset // baseline: don't show just because we attached
+            }
+
+            offset != lastScrollOffset -> {
+                lastScrollOffset = offset
+                signalActivity()
+            }
         }
     }
 
@@ -1015,7 +1019,7 @@ private class LabelLayoutCache {
 }
 
 /** Everything the draw and pointer code read from the call site, bundled for one-shot updates. */
-private class ScrollbarConfig(
+internal class ScrollbarConfig(
     val style: ScrollbarStyle,
     val contentPadding: PaddingValues,
     val minItemsToShow: Int,
@@ -1055,7 +1059,7 @@ private class ScrollbarConfig(
 // INPUT HELPERS: shared by touch, mouse press and mouse hover, so they agree on where the thumb is.
 
 /** True when [crossPosition] is inside the strip along the bar's edge that accepts input. */
-private fun Density.isInBarStrip(
+internal fun Density.isInBarStrip(
     config: ScrollbarConfig,
     isVertical: Boolean,
     crossLength: Float,
@@ -1073,7 +1077,7 @@ private fun Density.isInBarStrip(
 }
 
 /** Size of the thumb across the scroll axis: the capsule, or the icon. */
-private fun Density.crossLengthOfThumb(style: ScrollbarStyle, isVertical: Boolean): Float =
+internal fun Density.crossLengthOfThumb(style: ScrollbarStyle, isVertical: Boolean): Float =
     when (val appearance = style.thumbAppearance) {
         is ThumbAppearance.Icon ->
             (if (isVertical) appearance.size.width else appearance.size.height).toPx()
@@ -1082,7 +1086,7 @@ private fun Density.crossLengthOfThumb(style: ScrollbarStyle, isVertical: Boolea
     }
 
 /** Where the thumb rests across the scroll axis, at its edge. */
-private fun Density.restingCrossStart(
+internal fun Density.restingCrossStart(
     config: ScrollbarConfig,
     isVertical: Boolean,
     crossLength: Float,
@@ -1126,7 +1130,7 @@ private fun Density.layoutThumbForInput(
  * Thumb position (0..endCap) when the thumb is centered on [mainPosition]. Mouse track clicks
  * and the hover preview both use it, so a click lands exactly where the preview pointed.
  */
-private fun centeredProgress(
+internal fun centeredProgress(
     geometry: ThumbGeometry,
     startPadding: Float,
     mainPosition: Float,
@@ -1502,11 +1506,13 @@ private fun Modifier.scrollbarFor(
                 val center = startPadding +
                         hoverGeometry.trackLength * visualProgress(shown, isMirrored) +
                         hoverGeometry.length / 2f
-                if (index != lastPreviewIndex) {
-                    lastPreviewIndex = index
-                    controller.setPreview(labelConfig.provider(index), center)
-                } else if (controller.previewLabel != null) {
-                    controller.previewCenter = center
+                when {
+                    index != lastPreviewIndex -> {
+                        lastPreviewIndex = index
+                        controller.setPreview(labelConfig.provider(index), center)
+                    }
+
+                    controller.previewLabel != null -> controller.previewCenter = center
                 }
             }
         }
@@ -1640,7 +1646,7 @@ private fun Modifier.scrollbarFor(
                     )
                 }
 
-                else -> {
+                ThumbAppearance.Default -> {
                     drawScrollbar(
                         isVertical = isVertical,
                         geometry = geometry,
