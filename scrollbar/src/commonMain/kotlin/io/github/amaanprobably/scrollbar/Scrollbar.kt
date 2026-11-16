@@ -479,8 +479,9 @@ internal val DefaultScrollbarStyle: ScrollbarStyle = ScrollbarDefaults.style()
  * added when `null`.
  * @param scrollToEndLabel Accessibility label for a "scroll to end" action. No action is added
  * when `null`.
- * @param onEdgeChange Lets users move the bar to the other side: hold the thumb still (about a
- * second, twice the system long-press timeout), drag it across, and it snaps to the nearest edge. Store the new edge and pass it back
+ * @param onEdgeChange Lets users move the bar to the other side: hold the thumb still (half a
+ * second, or the system long-press timeout if that's longer), drag it across, and it snaps to the
+ * nearest edge. Store the new edge and pass it back
  * as [edge], like any setting. Touch only. Off when `null`.
  */
 @Composable
@@ -747,11 +748,12 @@ private const val NO_BASELINE = -1
 private const val HAS_MORE_END_CAP = 0.95f
 
 /**
- * Shortest hold that picks the thumb up to move it to the other edge. The hold is twice the
- * system long-press timeout, but never less than this, so a hesitant grab or a drag the device
- * registers late doesn't start a move by accident.
+ * Shortest hold that picks the thumb up to move it to the other edge: 500 ms, the long-press
+ * default on iOS and in Flutter (including its drag-to-move `LongPressDraggable`). Android's
+ * system long press is 400 ms, which is tuned for quick menus and too easy to hit by accident on
+ * a thumb people also drag.
  */
-private const val EDGE_MOVE_MIN_HOLD_MILLIS = 800L
+private const val EDGE_MOVE_MIN_HOLD_MILLIS = 500L
 
 /** Move hint shown next to a picked-up thumb: circle radius and its gap from the thumb. */
 private val MOVE_HINT_RADIUS = 14.dp
@@ -1489,9 +1491,9 @@ private fun Modifier.scrollbarFor(
                 // makes it a normal drag for the rest of the gesture.
                 val edgeMoveEnabled = currentConfig.onEdgeChange != null && onThumb && !isMouse
                 val grabMark = TimeSource.Monotonic.markNow()
-                // Longer than a normal long press: picking the bar up should be deliberate. Scaling
-                // the system timeout keeps it longer for people who set a slower touch-and-hold.
-                val holdMillis = max(viewConfiguration.longPressTimeoutMillis * 2, EDGE_MOVE_MIN_HOLD_MILLIS)
+                // At least 500 ms, and never shorter than the system long press, so people who set
+                // a slower touch-and-hold in accessibility settings keep their longer delay.
+                val holdMillis = max(viewConfiguration.longPressTimeoutMillis, EDGE_MOVE_MIN_HOLD_MILLIS)
                 val touchSlop = viewConfiguration.touchSlop
                 var movedSinceDown = false
                 val crossThumbLength = crossLengthOfThumb(currentConfig.style, isVertical)

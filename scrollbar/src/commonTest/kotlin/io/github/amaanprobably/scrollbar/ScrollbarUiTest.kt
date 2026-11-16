@@ -354,8 +354,8 @@ class ScrollbarUiTest {
             grabbedAt = thumbAtTop()
             down(grabbedAt)
         }
-        // Longer than a normal long press, shorter than the 800 ms minimum hold.
-        mainClock.advanceTimeBy(600)
+        // Shorter than the 500 ms minimum hold.
+        mainClock.advanceTimeBy(300)
         list.performTouchInput {
             moveInSteps(grabbedAt, Offset(left + 10f, grabbedAt.y))
             up()
