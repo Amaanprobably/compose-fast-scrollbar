@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import io.github.amaanprobably.scrollbar.*
 import kotlinx.coroutines.delay
+import kotlin.time.Duration.Companion.milliseconds
 
 private enum class Demo(val title: String) {
     Column("Column"),
@@ -112,7 +113,7 @@ fun App() {
                     Demo.Column -> ColumnDemo(itemCount, reverseLayout, withPadding, style, label, edge, onEdgeChange, demoModifier)
                     Demo.Grid -> GridDemo(itemCount, reverseLayout, withPadding, style, label, edge, onEdgeChange, demoModifier)
                     Demo.Row -> RowDemo(itemCount, reverseLayout, withPadding, style, label, edge, onEdgeChange, demoModifier)
-                    Demo.Feed -> FeedDemo(style, edge, onEdgeChange, demoModifier)
+                    Demo.Feed -> FeedDemo(reverseLayout, style, edge, onEdgeChange, demoModifier)
                 }
             }
         }
@@ -278,9 +279,13 @@ private fun RowDemo(
 private const val FEED_PAGE_SIZE = 30
 private const val FEED_TOTAL = 300
 
-/** Simulates an infinite feed: 30 more items arrive 600 ms after you get near the end. */
+/**
+ * Simulates an infinite feed: 30 more items arrive 600 ms after you get near the end.
+ * With Reverse on it behaves like a chat: newest at the bottom, older pages load at the top.
+ */
 @Composable
 private fun FeedDemo(
+    reverseLayout: Boolean,
     style: ScrollbarStyle,
     edge: FastScrollEdge,
     onEdgeChange: (FastScrollEdge) -> Unit,
@@ -295,7 +300,7 @@ private fun FeedDemo(
         snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
             .collect { lastVisible ->
                 if (lastVisible != null && lastVisible >= loadedCount - 5 && loadedCount < FEED_TOTAL) {
-                    delay(600)
+                    delay(600.milliseconds)
                     loadedCount += FEED_PAGE_SIZE
                 }
             }
@@ -303,6 +308,7 @@ private fun FeedDemo(
 
     LazyColumn(
         state = listState,
+        reverseLayout = reverseLayout,
         modifier = modifier.scrollbar(
             listState, edge = edge, hasMore = hasMore, style = style, label = label,
             onEdgeChange = onEdgeChange,
