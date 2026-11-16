@@ -95,7 +95,7 @@ While `hasMore` is `true`, the thumb stops short of the very end, and dragging t
 
 ### Movable bar
 
-Let users move the bar to the other side, which helps left-handed and one-handed use. Long-press the thumb without moving, drag it across, and it snaps to the nearest edge:
+Let users move the bar to the other side, which helps left-handed and one-handed use. Hold the thumb still for about a second, drag it across, and it snaps to the nearest edge:
 
 ```kotlin
 var edge by rememberSaveable { mutableStateOf(FastScrollEdge.END) }

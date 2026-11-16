@@ -479,8 +479,8 @@ internal val DefaultScrollbarStyle: ScrollbarStyle = ScrollbarDefaults.style()
  * added when `null`.
  * @param scrollToEndLabel Accessibility label for a "scroll to end" action. No action is added
  * when `null`.
- * @param onEdgeChange Lets users move the bar to the other side: long-press the thumb without
- * moving, drag it across, and it snaps to the nearest edge. Store the new edge and pass it back
+ * @param onEdgeChange Lets users move the bar to the other side: hold the thumb still (about a
+ * second, twice the system long-press timeout), drag it across, and it snaps to the nearest edge. Store the new edge and pass it back
  * as [edge], like any setting. Touch only. Off when `null`.
  */
 @Composable
@@ -745,6 +745,13 @@ private const val NO_BASELINE = -1
  * real end isn't known yet.
  */
 private const val HAS_MORE_END_CAP = 0.95f
+
+/**
+ * Shortest hold that picks the thumb up to move it to the other edge. The hold is twice the
+ * system long-press timeout, but never less than this, so a hesitant grab or a drag the device
+ * registers late doesn't start a move by accident.
+ */
+private const val EDGE_MOVE_MIN_HOLD_MILLIS = 800L
 
 /** Move hint shown next to a picked-up thumb: circle radius and its gap from the thumb. */
 private val MOVE_HINT_RADIUS = 14.dp
@@ -1482,7 +1489,9 @@ private fun Modifier.scrollbarFor(
                 // makes it a normal drag for the rest of the gesture.
                 val edgeMoveEnabled = currentConfig.onEdgeChange != null && onThumb && !isMouse
                 val grabMark = TimeSource.Monotonic.markNow()
-                val longPressMillis = viewConfiguration.longPressTimeoutMillis
+                // Longer than a normal long press: picking the bar up should be deliberate. Scaling
+                // the system timeout keeps it longer for people who set a slower touch-and-hold.
+                val holdMillis = max(viewConfiguration.longPressTimeoutMillis * 2, EDGE_MOVE_MIN_HOLD_MILLIS)
                 val touchSlop = viewConfiguration.touchSlop
                 var movedSinceDown = false
                 val crossThumbLength = crossLengthOfThumb(currentConfig.style, isVertical)
@@ -1494,7 +1503,7 @@ private fun Modifier.scrollbarFor(
                     val waitingForLongPress =
                         edgeMoveEnabled && !movedSinceDown && !controller.movingEdge
                     val event = if (waitingForLongPress) {
-                        val remaining = longPressMillis - grabMark.elapsedNow().inWholeMilliseconds
+                        val remaining = holdMillis - grabMark.elapsedNow().inWholeMilliseconds
                         if (remaining <= 0L) null
                         else withTimeoutOrNull(remaining) { awaitPointerEvent(PointerEventPass.Initial) }
                     } else {

@@ -330,7 +330,7 @@ class ScrollbarUiTest {
             grabbedAt = thumbAtTop()
             down(grabbedAt)
         }
-        mainClock.advanceTimeBy(1_000) // well past the long-press timeout, finger still
+        mainClock.advanceTimeBy(3_000) // past the hold even with a slow system touch-and-hold setting
         list.performTouchInput {
             moveInSteps(grabbedAt, Offset(left + 10f, grabbedAt.y))
             up()
@@ -338,6 +338,30 @@ class ScrollbarUiTest {
         waitForIdle()
         assertEquals(listOf(FastScrollEdge.START), edgeChanges)
         assertEquals(0, state.firstVisibleItemIndex, "moving the bar must not scroll")
+    }
+
+    @Test
+    fun aShortHoldDoesNotPickUpTheBar() = runComposeUiTest {
+        lateinit var state: LazyListState
+        val edgeChanges = mutableListOf<FastScrollEdge>()
+        setContent {
+            state = rememberLazyListState()
+            TestList(state, itemCount = 10_000, onEdgeChange = { edgeChanges += it })
+        }
+        val list = onNodeWithTag(LIST_TAG)
+        var grabbedAt = Offset.Zero
+        list.performTouchInput {
+            grabbedAt = thumbAtTop()
+            down(grabbedAt)
+        }
+        // Longer than a normal long press, shorter than the 800 ms minimum hold.
+        mainClock.advanceTimeBy(600)
+        list.performTouchInput {
+            moveInSteps(grabbedAt, Offset(left + 10f, grabbedAt.y))
+            up()
+        }
+        waitForIdle()
+        assertTrue(edgeChanges.isEmpty(), "a hesitant grab must not start a move")
     }
 
     @Test
