@@ -38,6 +38,19 @@ class VisualProgressTest {
     }
 }
 
+class LogicalScrollOffsetTest {
+    @Test
+    fun listOffsetIsWholeItemsPlusTheVisiblePart() {
+        assertEquals(2_000f * 50f + 20f, logicalScrollOffset(2_000, 20, itemsPerLine = 1, averageLineLength = 50f))
+    }
+
+    @Test
+    fun gridOffsetCountsLinesNotItems() {
+        // Item 30 in a 3-column grid is on line 10.
+        assertEquals(10 * 80f, logicalScrollOffset(30, 0, itemsPerLine = 3, averageLineLength = 80f))
+    }
+}
+
 class ScrollMetricsTest {
     @Test
     fun thumbFractionIsViewportOverContent() {

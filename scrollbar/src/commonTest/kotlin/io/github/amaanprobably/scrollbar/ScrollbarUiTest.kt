@@ -187,6 +187,59 @@ class ScrollbarUiTest {
     }
 
     @Test
+    fun progressFollowsListOrderInANormalList() = runComposeUiTest {
+        lateinit var state: LazyListState
+        setContent {
+            state = rememberLazyListState()
+            TestList(state, itemCount = 10_000)
+        }
+        runOnIdle { state.requestScrollToItem(2_000) }
+        waitForIdle()
+        val metrics = ScrollMetrics()
+        assertTrue(metrics.update(ListScrollbarTarget(state)))
+        assertEquals(0.2f, metrics.progress, 0.01f)
+    }
+
+    @Test
+    fun progressFollowsListOrderInAReversedList() = runComposeUiTest {
+        // Regression: the thumb used to jump to the wrong end after release in reversed lists.
+        lateinit var state: LazyListState
+        setContent {
+            state = rememberLazyListState()
+            TestList(state, itemCount = 10_000, reverseLayout = true)
+        }
+        runOnIdle { state.requestScrollToItem(2_000) }
+        waitForIdle()
+        val metrics = ScrollMetrics()
+        assertTrue(metrics.update(ListScrollbarTarget(state)))
+        assertEquals(0.2f, metrics.progress, 0.01f, "item 2000 of 10000 is 20% from the start")
+    }
+
+    @Test
+    fun reversedListGrabAfterScrollingContinuesFromTheRightPlace() = runComposeUiTest {
+        lateinit var state: LazyListState
+        setContent {
+            state = rememberLazyListState()
+            TestList(state, itemCount = 10_000, reverseLayout = true)
+        }
+        runOnIdle { state.requestScrollToItem(2_000) }
+        waitForIdle()
+        var expectedIndex = 0
+        onNodeWithTag(LIST_TAG).performTouchInput {
+            // The thumb must be drawn 20% up from the bottom. Grab it there and move it up by a
+            // tenth of the track: a fast-scroll to about 30%. If the thumb were drawn at the
+            // wrong end, this touch would miss it and only nudge the list.
+            val track = height - 56.dp.toPx()
+            val thumbCenter = Offset(right - 10f, bottom - 28.dp.toPx() - track * 0.2f)
+            expectedIndex = 3_000
+            drag(thumbCenter, thumbCenter + Offset(0f, -track * 0.1f))
+        }
+        waitForIdle()
+        val landed = state.firstVisibleItemIndex
+        assertTrue(landed in expectedIndex - 300..expectedIndex + 300, "landed at $landed, expected about $expectedIndex")
+    }
+
+    @Test
     fun gridWithAFullSpanHeaderReachesTheEnd() = runComposeUiTest {
         lateinit var state: LazyGridState
         setContent {

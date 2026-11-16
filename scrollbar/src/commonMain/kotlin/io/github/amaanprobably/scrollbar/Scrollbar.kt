@@ -61,6 +61,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -541,10 +542,14 @@ internal interface ScrollbarTarget {
     /** Items that share one scroll line: 1 for lists, the estimated span count for grids. */
     val itemsPerLine: Int
 
+    /** First visible item and how far it's scrolled, in list order whatever the layout. */
+    val firstVisibleItemIndex: Int
+    val firstVisibleItemScrollOffset: Int
+
     fun requestScrollToItem(index: Int, offset: Int)
 }
 
-private class ListScrollbarTarget(override val state: LazyListState) : ScrollbarTarget {
+internal class ListScrollbarTarget(override val state: LazyListState) : ScrollbarTarget {
     override val isVertical: Boolean
         get() = state.layoutInfo.orientation == Orientation.Vertical
     override val isReversed: Boolean
@@ -553,6 +558,10 @@ private class ListScrollbarTarget(override val state: LazyListState) : Scrollbar
         get() = state.layoutInfo.totalItemsCount
     override val itemsPerLine: Int
         get() = 1
+    override val firstVisibleItemIndex: Int
+        get() = state.firstVisibleItemIndex
+    override val firstVisibleItemScrollOffset: Int
+        get() = state.firstVisibleItemScrollOffset
 
     override fun requestScrollToItem(index: Int, offset: Int) =
         state.requestScrollToItem(index, offset)
@@ -566,15 +575,24 @@ private class GridScrollbarTarget(override val state: LazyGridState) : Scrollbar
     override val totalItemsCount: Int
         get() = state.layoutInfo.totalItemsCount
 
+    // The span count only changes when the items or the grid's size change, but the draw phase
+    // asks every frame, so it's cached on those two.
+    private var cachedItemsPerLine = 1
+    private var cachedItemCount = -1
+    private var cachedViewportSize = IntSize.Zero
+
     /**
-     * The most items found in any visible line. Only called when the thumb is grabbed.
-     * Visible items come in index order, so the items of one line are next to each other and a
-     * single pass is enough, with no allocation.
+     * The most items found in any visible line. Visible items come in index order, so the items
+     * of one line are next to each other and a single pass is enough, with no allocation.
      */
     override val itemsPerLine: Int
         get() {
-            val visibleItems = state.layoutInfo.visibleItemsInfo
-            val vertical = isVertical
+            val layoutInfo = state.layoutInfo
+            if (layoutInfo.totalItemsCount == cachedItemCount && layoutInfo.viewportSize == cachedViewportSize) {
+                return cachedItemsPerLine
+            }
+            val visibleItems = layoutInfo.visibleItemsInfo
+            val vertical = layoutInfo.orientation == Orientation.Vertical
             var mostInOneLine = 1
             var itemsInCurrentLine = 0
             var currentLine = Int.MIN_VALUE
@@ -589,8 +607,17 @@ private class GridScrollbarTarget(override val state: LazyGridState) : Scrollbar
                 }
                 if (itemsInCurrentLine > mostInOneLine) mostInOneLine = itemsInCurrentLine
             }
+            if (visibleItems.isNotEmpty()) { // don't cache a layout with nothing measured yet
+                cachedItemsPerLine = mostInOneLine
+                cachedItemCount = layoutInfo.totalItemsCount
+                cachedViewportSize = layoutInfo.viewportSize
+            }
             return mostInOneLine
         }
+    override val firstVisibleItemIndex: Int
+        get() = state.firstVisibleItemIndex
+    override val firstVisibleItemScrollOffset: Int
+        get() = state.firstVisibleItemScrollOffset
 
     override fun requestScrollToItem(index: Int, offset: Int) =
         state.requestScrollToItem(index, offset)
@@ -604,6 +631,22 @@ private fun ScrollableState.pinnedProgress(offset: Float, maxScroll: Float): Flo
     !canScrollForward -> 1f
     else -> (offset / maxScroll).coerceIn(0f, 1f)
 }
+
+/**
+ * How far the list is scrolled, in pixels from its start in list order, estimated from the first
+ * visible item. Built from the same average line length that dragging maps through, so the thumb
+ * and the drag always agree.
+ *
+ * The list's own scroll indicator offset isn't used here: in a reversed layout it runs in screen
+ * order, so mirroring it again for reverseLayout flipped the thumb to the wrong end.
+ */
+internal fun logicalScrollOffset(
+    firstVisibleItemIndex: Int,
+    firstVisibleItemScrollOffset: Int,
+    itemsPerLine: Int,
+    averageLineLength: Float,
+): Float = (firstVisibleItemIndex / itemsPerLine.coerceAtLeast(1)) * averageLineLength +
+        firstVisibleItemScrollOffset
 
 /** Progress is logical (0 = start of the list). Mirrored layouts show it flipped on screen. */
 internal fun visualProgress(progress: Float, isMirrored: Boolean): Float =
@@ -637,7 +680,10 @@ internal class ScrollMetrics {
         contentLength = content
         viewportLength = viewport
         averageLineLength = (content / lineCount).coerceAtLeast(1f)
-        progress = target.state.pinnedProgress(indicator.scrollOffset.toFloat(), maxScroll)
+        val offset = logicalScrollOffset(
+            target.firstVisibleItemIndex, target.firstVisibleItemScrollOffset, perLine, averageLineLength,
+        )
+        progress = target.state.pinnedProgress(offset, maxScroll)
         return true
     }
 }
@@ -1656,13 +1702,17 @@ private fun Modifier.scrollbarFor(
                 }
 
                 // Read before the alpha check so scrolling always invalidates the draw.
-                val offset = indicator.scrollOffset
+                val itemsPerLine = target.itemsPerLine.coerceAtLeast(1)
+                val lineCount = (itemCount + itemsPerLine - 1) / itemsPerLine
+                val offset = logicalScrollOffset(
+                    target.firstVisibleItemIndex,
+                    target.firstVisibleItemScrollOffset,
+                    itemsPerLine,
+                    averageLineLength = (content / lineCount).coerceAtLeast(1f),
+                )
 
                 val endCap = config.endCap
-                val live = target.state.pinnedProgress(
-                    offset.toFloat(),
-                    (content - viewport).coerceAtLeast(1f),
-                ) * endCap
+                val live = target.state.pinnedProgress(offset, (content - viewport).coerceAtLeast(1f)) * endCap
                 // Runs even while hidden, so a bar fading in later has a fresh baseline.
                 controller.noteShownProgress(itemCount, endCap, live)
 
