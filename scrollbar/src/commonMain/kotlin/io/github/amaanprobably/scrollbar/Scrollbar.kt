@@ -73,10 +73,12 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlin.math.sin
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.TimeSource
@@ -890,6 +892,20 @@ private class ScrollbarController(
     val moveHint = Animatable(0f)
     private var moveHintJob: Job? = null
 
+    /** Which side of the thumb the hint is on: 0 = left (or top), 1 = right (or bottom). */
+    val moveHintSide = Animatable(1f)
+    private var moveHintSideJob: Job? = null
+
+    /** Moves the hint to the side with more room. Does nothing if it's already there or heading there. */
+    fun setMoveHintSide(onEndSide: Boolean, animate: Boolean = true) {
+        val target = if (onEndSide) 1f else 0f
+        if (moveHintSide.targetValue == target) return
+        moveHintSideJob?.cancel()
+        moveHintSideJob = scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            if (animate) moveHintSide.animateTo(target, tween(150)) else moveHintSide.snapTo(target)
+        }
+    }
+
     private fun fadeMoveHint(target: Float) {
         moveHintJob?.cancel()
         moveHintJob = scope.launch { moveHint.animateTo(target, tween(150)) }
@@ -1026,7 +1042,8 @@ private class ScrollbarController(
         hidePreview()
     }
 
-    fun beginEdgeMove(center: Float) {
+    fun beginEdgeMove(center: Float, hintOnEndSide: Boolean) {
+        setMoveHintSide(hintOnEndSide, animate = false) // no slide on pickup
         edgeSnapJob?.cancel()
         edgeSnapJob = scope.launch(start = CoroutineStart.UNDISPATCHED) { edgeSnap.snapTo(1f) }
         moveCrossCenter = center
@@ -1087,6 +1104,7 @@ private class ScrollbarController(
         previewJob?.cancel()
         edgeSnapJob?.cancel()
         moveHintJob?.cancel()
+        moveHintSideJob?.cancel()
         fadeJob = null
         events.close()
     }
@@ -1222,9 +1240,13 @@ internal fun Density.restingCrossStart(
     if (config.isCrossAxisAtOrigin(isVertical)) config.style.edgePadding.toPx()
     else crossLength - thumbCrossLength - config.style.edgePadding.toPx()
 
+/** The hint goes on the thumb's end side (right or bottom) while the thumb is in the first half. */
+internal fun moveHintOnEndSide(thumbCrossCenter: Float, crossLength: Float): Boolean =
+    thumbCrossCenter < crossLength / 2f
+
 /**
- * Center of the move hint across the scroll axis: next to the thumb, on the side with more room
- * (toward the middle of the list), and kept inside the list.
+ * Center of the move hint across the scroll axis. [endSide] is 0 for the start side (left or top
+ * of the thumb), 1 for the end side, and in between while it slides over. Kept inside the list.
  */
 internal fun moveHintCrossCenter(
     thumbCrossStart: Float,
@@ -1232,13 +1254,20 @@ internal fun moveHintCrossCenter(
     crossLength: Float,
     hintRadius: Float,
     gap: Float,
+    endSide: Float,
 ): Float {
-    val thumbCenter = thumbCrossStart + thumbCrossLength / 2f
-    val center =
-        if (thumbCenter < crossLength / 2f) thumbCrossStart + thumbCrossLength + gap + hintRadius
-        else thumbCrossStart - gap - hintRadius
+    val startSideCenter = thumbCrossStart - gap - hintRadius
+    val endSideCenter = thumbCrossStart + thumbCrossLength + gap + hintRadius
+    val center = lerp(startSideCenter, endSideCenter, endSide)
     return center.coerceAtLeast(hintRadius).coerceAtMost((crossLength - hintRadius).coerceAtLeast(hintRadius))
 }
+
+/**
+ * How far the hint moves along the scroll axis to arc around the thumb while it slides from one
+ * side to the other: 0 at either side, half the thumb + gap + radius halfway.
+ */
+internal fun moveHintArcOffset(endSide: Float, thumbHalfLength: Float, gap: Float, hintRadius: Float): Float =
+    sin(PI.toFloat() * endSide.coerceIn(0f, 1f)) * (thumbHalfLength + gap + hintRadius)
 
 /**
  * Lays out the thumb where it is drawn right now, into [metrics] and [geometry]. Returns false
@@ -1513,7 +1542,10 @@ private fun Modifier.scrollbarFor(
                     }
                     if (event == null) {
                         // Held still long enough: pick the thumb up.
-                        controller.beginEdgeMove(restingCenter)
+                        controller.beginEdgeMove(
+                            restingCenter,
+                            hintOnEndSide = moveHintOnEndSide(restingCenter, crossLength),
+                        )
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                         continue
                     }
@@ -1549,6 +1581,8 @@ private fun Modifier.scrollbarFor(
                         controller.moveCrossCenter = (restingCenter + cross - downCross)
                             .coerceAtLeast(halfThumb)
                             .coerceAtMost((crossLength - halfThumb).coerceAtLeast(halfThumb))
+                        // Crossing the middle slides the hint around to the side with more room.
+                        controller.setMoveHintSide(moveHintOnEndSide(controller.moveCrossCenter, crossLength))
                         change.consume()
                         continue
                     }
@@ -1839,11 +1873,17 @@ private fun Modifier.scrollbarFor(
             val moveHintAmount = controller.moveHint.value
             if (moveHintAmount > 0f) {
                 val hintRadius = MOVE_HINT_RADIUS.toPx()
+                val hintGap = MOVE_HINT_GAP.toPx()
+                val endSide = controller.moveHintSide.value
+                // Arcs toward the start of the list while sliding over, so it goes around the
+                // thumb instead of through it.
+                val mainCenter = geometry.start + geometry.length / 2f -
+                        moveHintArcOffset(endSide, geometry.length / 2f, hintGap, hintRadius)
                 drawMoveHint(
                     isVertical = isVertical,
-                    mainCenter = geometry.start + geometry.length / 2f,
+                    mainCenter = mainCenter.coerceAtLeast(hintRadius),
                     crossCenter = moveHintCrossCenter(
-                        thumbCrossStart, thumbCrossLength, crossLength, hintRadius, MOVE_HINT_GAP.toPx(),
+                        thumbCrossStart, thumbCrossLength, crossLength, hintRadius, hintGap, endSide,
                     ),
                     radius = hintRadius,
                     bubbleColor = label?.style?.bubbleColor ?: ScrollbarLabelStyle().bubbleColor,

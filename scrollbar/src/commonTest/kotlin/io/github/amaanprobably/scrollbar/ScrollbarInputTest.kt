@@ -189,16 +189,32 @@ class ThumbPlacementTest {
 
 class MoveHintPlacementTest {
     @Test
-    fun hintSitsOnTheInnerSideOfTheThumb() {
-        // Thumb at the right edge (crossStart 364, 32 wide, list 400): hint goes to its left.
-        assertEquals(364f - 8f - 14f, moveHintCrossCenter(364f, 32f, 400f, hintRadius = 14f, gap = 8f))
-        // Thumb at the left edge: hint goes to its right.
-        assertEquals(4f + 32f + 8f + 14f, moveHintCrossCenter(4f, 32f, 400f, hintRadius = 14f, gap = 8f))
+    fun hintGoesOnTheSideWithMoreRoom() {
+        assertTrue(moveHintOnEndSide(thumbCrossCenter = 20f, crossLength = 400f), "left half: hint on the right")
+        assertFalse(moveHintOnEndSide(thumbCrossCenter = 380f, crossLength = 400f), "right half: hint on the left")
+    }
+
+    @Test
+    fun hintSitsNextToTheThumbOnEachSide() {
+        // Thumb at the right edge (crossStart 364, 32 wide, list 400), hint on its left.
+        assertEquals(364f - 8f - 14f, moveHintCrossCenter(364f, 32f, 400f, hintRadius = 14f, gap = 8f, endSide = 0f))
+        // Thumb at the left edge, hint on its right.
+        assertEquals(4f + 32f + 8f + 14f, moveHintCrossCenter(4f, 32f, 400f, hintRadius = 14f, gap = 8f, endSide = 1f))
+    }
+
+    @Test
+    fun hintPassesTheThumbCenterHalfwayThroughTheSlide() {
+        // Halfway between both sides is the thumb's own center (100 + 32 / 2 = 116)...
+        assertEquals(116f, moveHintCrossCenter(100f, 32f, 400f, hintRadius = 14f, gap = 8f, endSide = 0.5f))
+        // ...which is why it arcs around the thumb there, and not at either side.
+        assertEquals(20f + 8f + 14f, moveHintArcOffset(0.5f, thumbHalfLength = 20f, gap = 8f, hintRadius = 14f), 1e-4f)
+        assertEquals(0f, moveHintArcOffset(0f, 20f, 8f, 14f), 1e-4f)
+        assertEquals(0f, moveHintArcOffset(1f, 20f, 8f, 14f), 1e-4f)
     }
 
     @Test
     fun hintStaysInsideANarrowList() {
-        val center = moveHintCrossCenter(4f, 32f, 50f, hintRadius = 14f, gap = 8f)
+        val center = moveHintCrossCenter(4f, 32f, 50f, hintRadius = 14f, gap = 8f, endSide = 1f)
         assertTrue(center in 14f..36f, "center $center must keep the whole circle inside")
     }
 }
