@@ -2,6 +2,7 @@ package com.amaanqureshi.scrollbar
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -148,7 +149,7 @@ private fun Controls(
     shortContainer: Boolean, onShortContainer: (Boolean) -> Unit,
     edgeToEdge: Boolean, onEdgeToEdge: (Boolean) -> Unit,
 ) {
-    Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         ChipRow {
             Demo.entries.forEach { option ->
                 FilterChip(selected = demo == option, onClick = { onDemo(option) }, label = { Text(option.title) })
@@ -175,7 +176,7 @@ private fun Controls(
 private fun ChipRow(content: @Composable () -> Unit) {
     Row(
         modifier = Modifier.horizontalScroll(rememberScrollState()),
-        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) { content() }
 }
