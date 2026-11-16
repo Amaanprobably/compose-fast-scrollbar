@@ -167,6 +167,32 @@ class CenteredProgressTest {
     }
 }
 
+class ThumbEndPaddingTest {
+    @Test
+    fun capsuleKeepsTheThumbFarEnoughFromTheEndsToStayCentered() {
+        val capsule = ScrollbarDefaults.style(
+            thumbAppearance = ThumbAppearance.Default, trackPadding = 8.dp, capsuleExtraLength = 24.dp,
+        )
+        assertEquals(12.dp, config(style = capsule).thumbEndPadding) // half of 24 beats 8
+    }
+
+    @Test
+    fun trackPaddingWinsWhenItIsAlreadyEnough() {
+        val capsule = ScrollbarDefaults.style(
+            thumbAppearance = ThumbAppearance.Default, trackPadding = 8.dp, capsuleExtraLength = 10.dp,
+        )
+        assertEquals(8.dp, config(style = capsule).thumbEndPadding)
+    }
+
+    @Test
+    fun barAndIconUseTrackPaddingOnly() {
+        val bar = ScrollbarDefaults.style(
+            thumbAppearance = ThumbAppearance.Bar, trackPadding = 6.dp, capsuleExtraLength = 40.dp,
+        )
+        assertEquals(6.dp, config(style = bar).thumbEndPadding)
+    }
+}
+
 class ThumbPlacementTest {
     @Test
     fun crossLengthDependsOnAppearance() = with(testDensity) {
@@ -231,6 +257,13 @@ class StyleDefaultsTest {
         }
         assertEquals(expected, ScrollbarDefaults.style().thumbAppearance)
         assertEquals(expected, DefaultScrollbarStyle.thumbAppearance)
+    }
+
+    @Test
+    fun androidCapsuleIsSlimAndRoomy() {
+        assertEquals(24.dp, AndroidDefaults.capsuleThickness)
+        assertEquals(64.dp, AndroidDefaults.thumbLength + AndroidDefaults.capsuleExtraLength)
+        assertEquals(48.dp, AndroidDefaults.touchTargetThickness, "the grab area doesn't shrink with the capsule")
     }
 
     @Test

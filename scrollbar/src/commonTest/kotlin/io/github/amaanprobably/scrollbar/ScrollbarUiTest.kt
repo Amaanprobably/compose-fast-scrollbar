@@ -44,13 +44,27 @@ private val uiTestStyle = ScrollbarDefaults.style(
     touchTargetThickness = 48.dp,
     edgePadding = 4.dp,
     capsuleThickness = 32.dp,
+    capsuleExtraLength = 16.dp, // half is 8 dp, so the thumb's end padding stays 8 dp
     visibility = ScrollbarVisibility.Always,
+)
+
+// Same geometry, but hidden until the list scrolls.
+private val uiTestAutoHideStyle = ScrollbarDefaults.style(
+    thumbAppearance = ThumbAppearance.Default,
+    thumbSizing = ThumbSizing.Fixed(40.dp),
+    trackPadding = 8.dp,
+    touchTargetThickness = 48.dp,
+    edgePadding = 4.dp,
+    capsuleThickness = 32.dp,
+    capsuleExtraLength = 16.dp, // half is 8 dp, so the thumb's end padding stays 8 dp
+    visibility = ScrollbarVisibility.AutoHide,
 )
 
 @Composable
 private fun TestList(
     state: LazyListState,
     itemCount: Int,
+    style: ScrollbarStyle = uiTestStyle,
     reverseLayout: Boolean = false,
     hasMore: Boolean = false,
     minItemsToShow: Int = 10,
@@ -68,7 +82,7 @@ private fun TestList(
                 state,
                 minItemsToShow = minItemsToShow,
                 hasMore = hasMore,
-                style = uiTestStyle,
+                style = style,
                 onEdgeChange = onEdgeChange,
             ),
     ) {
@@ -139,6 +153,45 @@ class ScrollbarUiTest {
         }
         waitForIdle()
         assertTrue(state.firstVisibleItemIndex in 4_900..5_100, "landed at ${state.firstVisibleItemIndex}")
+    }
+
+    @Test
+    fun aHiddenBarWakesUpWhenTheListScrollsAndCanThenBeGrabbed() = runComposeUiTest {
+        lateinit var state: LazyListState
+        setContent {
+            state = rememberLazyListState()
+            TestList(state, itemCount = 10_000, style = uiTestAutoHideStyle)
+        }
+        waitForIdle()
+        val list = onNodeWithTag(LIST_TAG)
+        // A normal swipe in the middle scrolls the list a little, which must reveal the bar.
+        list.performTouchInput {
+            drag(Offset(centerX, bottom * 0.7f), Offset(centerX, bottom * 0.4f))
+        }
+        // Let frames run so the draw phase sees the scroll and fades the bar in (150 ms), well
+        // before it would hide again (1.5 s). Events in one input block get no frames in between.
+        mainClock.advanceTimeBy(300)
+        // The thumb, still near the top, can now be grabbed and dragged to the end.
+        list.performTouchInput {
+            drag(thumbAtTop(), Offset(right - 10f, bottom * 2))
+        }
+        waitForIdle()
+        assertFalse(state.canScrollForward, "the revealed thumb should have been grabbed")
+    }
+
+    @Test
+    fun aHiddenBarCannotBeGrabbed() = runComposeUiTest {
+        lateinit var state: LazyListState
+        setContent {
+            state = rememberLazyListState()
+            TestList(state, itemCount = 10_000, style = uiTestAutoHideStyle)
+        }
+        waitForIdle()
+        onNodeWithTag(LIST_TAG).performTouchInput {
+            drag(thumbAtTop(), Offset(right - 10f, bottom * 2))
+        }
+        waitForIdle()
+        assertTrue(state.firstVisibleItemIndex < 100, "a hidden thumb isn't grabbable, so this is just a swipe")
     }
 
     @Test

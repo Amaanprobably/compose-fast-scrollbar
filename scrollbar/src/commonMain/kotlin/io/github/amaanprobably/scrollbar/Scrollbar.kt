@@ -282,7 +282,11 @@ internal class StyleDefaults(
     val capsuleExtraLength: Dp,
 )
 
-/** Android: a finger-sized capsule with a thumb inside, like the platform fast scroller. */
+/**
+ * Android: a capsule with a thumb inside, like the platform fast scroller.
+ * The capsule is 24dp wide and 64dp long (40dp thumb + 24dp), so it covers little content.
+ * The 48dp touch strip keeps it easy to grab.
+ */
 internal val AndroidDefaults = StyleDefaults(
     thumbAppearance = ThumbAppearance.Default,
     thumbThickness = 5.dp,
@@ -291,8 +295,8 @@ internal val AndroidDefaults = StyleDefaults(
     touchTargetThickness = 48.dp,
     trackPadding = 8.dp,
     edgePadding = 4.dp,
-    capsuleThickness = 32.dp,
-    capsuleExtraLength = 16.dp,
+    capsuleThickness = 24.dp,
+    capsuleExtraLength = 24.dp,
 )
 
 /**
@@ -307,8 +311,8 @@ internal val IosDefaults = StyleDefaults(
     touchTargetThickness = 48.dp,
     trackPadding = 6.dp,
     edgePadding = 3.dp,
-    capsuleThickness = 32.dp, // unused by Bar, kept for apps that switch to Default
-    capsuleExtraLength = 16.dp,
+    capsuleThickness = 24.dp, // unused by Bar, same as Android for apps that switch to Default
+    capsuleExtraLength = 24.dp,
 )
 
 /** Mouse-sized: a single thin bar, like desktop scrollbars. */
@@ -913,18 +917,22 @@ private class ScrollbarController(
 
     private val events = Channel<Unit>(Channel.CONFLATED)
     private var fadeJob: Job? = null
-    private var lastScrollOffset = Int.MIN_VALUE
+    private var lastScrollPosition = Long.MIN_VALUE
     private var appliedVisibility = ScrollbarVisibility.AutoHide
 
-    /** Fed by a snapshotFlow. Signals activity only on real movement. */
-    fun onScrollOffsetChanged(offset: Int) {
+    /**
+     * Called by the draw phase with the scroll position it just read (first visible item and its
+     * offset, packed into one Long). Signals activity only on real movement, so no separate
+     * watcher is needed: the draw phase already re-runs on every scroll.
+     */
+    fun onScrollPositionDrawn(position: Long) {
         when {
-            lastScrollOffset == Int.MIN_VALUE -> {
-                lastScrollOffset = offset // baseline: don't show just because we attached
+            lastScrollPosition == Long.MIN_VALUE -> {
+                lastScrollPosition = position // baseline: don't show just because we attached
             }
 
-            offset != lastScrollOffset -> {
-                lastScrollOffset = offset
+            position != lastScrollPosition -> {
+                lastScrollPosition = position
                 signalActivity()
             }
         }
@@ -1192,13 +1200,24 @@ internal class ScrollbarConfig(
     fun isMirrored(target: ScrollbarTarget): Boolean =
         target.isReversed != (!target.isVertical && layoutDirection == LayoutDirection.Rtl)
 
+    /**
+     * How far the thumb stops from each end of the track. For the capsule look it's at least half
+     * the capsule's extra length, so the capsule never has to be pushed back inside the list at
+     * the ends, which would leave the thumb off-center in it.
+     */
+    val thumbEndPadding: Dp
+        get() = when (style.thumbAppearance) {
+            ThumbAppearance.Default -> maxOf(style.trackPadding, style.capsuleExtraLength / 2)
+            ThumbAppearance.Bar, is ThumbAppearance.Icon -> style.trackPadding
+        }
+
     fun mainAxisStartPadding(isVertical: Boolean): Dp =
         (if (isVertical) contentPadding.calculateTopPadding()
-        else contentPadding.calculateLeftPadding(layoutDirection)) + style.trackPadding
+        else contentPadding.calculateLeftPadding(layoutDirection)) + thumbEndPadding
 
     fun mainAxisEndPadding(isVertical: Boolean): Dp =
         (if (isVertical) contentPadding.calculateBottomPadding()
-        else contentPadding.calculateRightPadding(layoutDirection)) + style.trackPadding
+        else contentPadding.calculateRightPadding(layoutDirection)) + thumbEndPadding
 }
 
 // INPUT HELPERS: shared by touch, mouse press and mouse hover, so they agree on where the thumb is.
@@ -1356,15 +1375,6 @@ private fun Modifier.scrollbarFor(
         snapshotFlow { controller.dragging }.collectLatest { isDragging ->
             controller.press.animateTo(if (isDragging) 1f else 0f, tween(120))
         }
-    }
-
-    // Wakes the bar on real scroll movement, even while it is hidden. Not needed when the bar is
-    // always visible, because signalActivity() does nothing then.
-    val alwaysVisible = style.visibility == ScrollbarVisibility.Always
-    LaunchedEffect(controller, target, alwaysVisible) {
-        if (alwaysVisible) return@LaunchedEffect
-        snapshotFlow { target.state.scrollIndicatorState?.scrollOffset }
-            .collect { offset -> if (offset != null) controller.onScrollOffsetChanged(offset) }
     }
 
     // Proportional sizing only: animates the estimated ratio so content-size jitter is hidden.
@@ -1746,12 +1756,17 @@ private fun Modifier.scrollbarFor(
                     return@drawWithContent
                 }
 
-                // Read before the alpha check so scrolling always invalidates the draw.
+                // Read before the alpha check so scrolling always invalidates the draw, even while
+                // the bar is hidden. That's also how a hidden bar notices scrolling and wakes up.
+                val firstIndex = target.firstVisibleItemIndex
+                val firstOffset = target.firstVisibleItemScrollOffset
+                controller.onScrollPositionDrawn((firstIndex.toLong() shl 32) or (firstOffset.toLong() and 0xFFFFFFFFL))
+
                 val itemsPerLine = target.itemsPerLine.coerceAtLeast(1)
                 val lineCount = (itemCount + itemsPerLine - 1) / itemsPerLine
                 val offset = logicalScrollOffset(
-                    target.firstVisibleItemIndex,
-                    target.firstVisibleItemScrollOffset,
+                    firstIndex,
+                    firstOffset,
                     itemsPerLine,
                     averageLineLength = (content / lineCount).coerceAtLeast(1f),
                 )
