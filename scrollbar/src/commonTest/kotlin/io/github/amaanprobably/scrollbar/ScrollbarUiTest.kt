@@ -1,6 +1,11 @@
 package io.github.amaanprobably.scrollbar
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.mandatorySystemGestures
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
@@ -76,6 +81,9 @@ private fun TestList(
         state = state,
         reverseLayout = reverseLayout,
         modifier = Modifier
+            // Clear of system bars and gesture zones, so the track geometry is the same on a
+            // desktop window and an edge-to-edge phone (zones would shorten the track).
+            .windowInsetsPadding(WindowInsets.safeDrawing.union(WindowInsets.mandatorySystemGestures))
             .size(300.dp, 600.dp)
             .testTag(LIST_TAG)
             .scrollbar(
@@ -96,6 +104,9 @@ private fun TestGrid(state: LazyGridState, itemCount: Int) {
         columns = GridCells.Fixed(3),
         state = state,
         modifier = Modifier
+            // Clear of system bars and gesture zones, so the track geometry is the same on a
+            // desktop window and an edge-to-edge phone (zones would shorten the track).
+            .windowInsetsPadding(WindowInsets.safeDrawing.union(WindowInsets.mandatorySystemGestures))
             .size(300.dp, 600.dp)
             .testTag(LIST_TAG)
             .scrollbar(state, style = uiTestStyle),

@@ -10,7 +10,6 @@ import androidx.compose.ui.unit.dp
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 private val testDensity = Density(1f) // 1 dp == 1 px
@@ -29,15 +28,22 @@ private fun config(
     edge: FastScrollEdge = FastScrollEdge.END,
     layoutDirection: LayoutDirection = LayoutDirection.Ltr,
     style: ScrollbarStyle = testStyle,
+    contentPadding: PaddingValues = PaddingValues(0.dp),
+    zoneTop: Float = 0f,
+    zoneBottom: Float = 0f,
 ) = ScrollbarConfig(
     style = style,
-    contentPadding = PaddingValues(0.dp),
+    contentPadding = contentPadding,
     minItemsToShow = 10,
     edge = edge,
     layoutDirection = layoutDirection,
     label = null,
     hasMore = false,
     onEdgeChange = null,
+    gestureZones = GestureZoneOverlap().apply {
+        top = zoneTop
+        bottom = zoneBottom
+    },
 )
 
 private fun inStrip(config: ScrollbarConfig, isVertical: Boolean, crossLength: Float, cross: Float) =
@@ -167,6 +173,88 @@ class CenteredProgressTest {
     }
 }
 
+class GestureZoneOverlapTest {
+    @Test
+    fun listTouchingTheBottomOverlapsTheBottomZone() {
+        // Root 800 tall, zone 32 at the bottom, list from 100 to 800.
+        assertEquals(32f, bottomGestureZoneOverlap(listTop = 100f, listHeight = 700f, rootHeight = 800f, zoneHeight = 32f))
+    }
+
+    @Test
+    fun listAboveTheZoneDoesNotOverlap() {
+        assertEquals(0f, bottomGestureZoneOverlap(listTop = 100f, listHeight = 600f, rootHeight = 800f, zoneHeight = 32f))
+    }
+
+    @Test
+    fun listUnderTheTopZoneOverlapsIt() {
+        assertEquals(24f, topGestureZoneOverlap(listTop = 0f, listHeight = 500f, zoneHeight = 24f))
+        assertEquals(0f, topGestureZoneOverlap(listTop = 60f, listHeight = 500f, zoneHeight = 24f))
+    }
+
+    @Test
+    fun overlapNeverExceedsTheList() {
+        assertEquals(10f, bottomGestureZoneOverlap(listTop = 790f, listHeight = 10f, rootHeight = 800f, zoneHeight = 32f))
+        assertEquals(10f, topGestureZoneOverlap(listTop = 0f, listHeight = 10f, zoneHeight = 24f))
+    }
+}
+
+class GestureZonePaddingTest {
+    private val bar = ScrollbarDefaults.style(thumbAppearance = ThumbAppearance.Bar, trackPadding = 8.dp)
+
+    @Test
+    fun trackStaysOutOfTheBottomZone() {
+        val config = config(style = bar, zoneBottom = 48f)
+        assertEquals(48f + 8f, config.mainAxisEndPaddingPx(testDensity, isVertical = true))
+    }
+
+    @Test
+    fun contentPaddingAndZoneAreNotAddedTogether() {
+        // An app that already passes the insets as content padding must not get them twice.
+        val smallerPadding = config(style = bar, contentPadding = PaddingValues(bottom = 24.dp), zoneBottom = 48f)
+        assertEquals(48f + 8f, smallerPadding.mainAxisEndPaddingPx(testDensity, isVertical = true))
+        val largerPadding = config(style = bar, contentPadding = PaddingValues(bottom = 60.dp), zoneBottom = 48f)
+        assertEquals(60f + 8f, largerPadding.mainAxisEndPaddingPx(testDensity, isVertical = true))
+    }
+
+    @Test
+    fun topZoneMovesTheTrackStart() {
+        assertEquals(24f + 8f, config(style = bar, zoneTop = 24f).mainAxisStartPaddingPx(testDensity, isVertical = true))
+    }
+
+    @Test
+    fun horizontalBarAtTheBottomIsLiftedOutOfTheZone() {
+        val bottomBar = config(edge = FastScrollEdge.END, zoneBottom = 30f)
+        assertEquals(30f, bottomBar.crossZoneInsetPx(isVertical = false))
+        // Strip is 48 wide above the 30 px zone: 300 - 30 - 48 = 222.
+        assertTrue(inStrip(bottomBar, isVertical = false, crossLength = 300f, cross = 222f))
+        assertFalse(inStrip(bottomBar, isVertical = false, crossLength = 300f, cross = 221f))
+        // Resting thumb: 300 - 32 (capsule) - 4 (edge padding) - 30 (zone) = 234.
+        assertEquals(234f, with(testDensity) { restingCrossStart(bottomBar, false, 300f, 32f) })
+    }
+
+    @Test
+    fun verticalBarsIgnoreTheZonesAcrossTheAxis() {
+        assertEquals(0f, config(zoneTop = 24f, zoneBottom = 48f).crossZoneInsetPx(isVertical = true))
+    }
+}
+
+class EdgeGuardSpanTest {
+    @Test
+    fun spanIsTheThumbPlusSlackInsideTheList() {
+        assertEquals(76f, guardSpanStart(thumbStart = 100f, slack = 24f))
+        assertEquals(0f, guardSpanStart(thumbStart = 10f, slack = 24f))
+        assertEquals(164f, guardSpanEnd(thumbEnd = 140f, slack = 24f, containerLength = 1_000f))
+        assertEquals(150f, guardSpanEnd(thumbEnd = 140f, slack = 24f, containerLength = 150f))
+    }
+
+    @Test
+    fun guardIsOnlyUpdatedWhenTheThumbLeavesIt() {
+        assertTrue(guardCoversThumb(76f, 164f, thumbStart = 90f, thumbEnd = 150f))
+        assertFalse(guardCoversThumb(76f, 164f, thumbStart = 130f, thumbEnd = 170f))
+        assertFalse(guardCoversThumb(Float.NaN, Float.NaN, thumbStart = 90f, thumbEnd = 150f), "nothing guarded yet")
+    }
+}
+
 class ThumbEndPaddingTest {
     @Test
     fun capsuleKeepsTheThumbFarEnoughFromTheEndsToStayCentered() {
@@ -284,7 +372,7 @@ class StyleDefaultsTest {
             Platform.Desktop -> desktop
         }
         val picked = ScrollbarDefaults.platformStyle(android = android, ios = ios, desktop = desktop)
-        assertSame(picked, expected)
+        assertTrue(picked === expected)
     }
 
     @Test

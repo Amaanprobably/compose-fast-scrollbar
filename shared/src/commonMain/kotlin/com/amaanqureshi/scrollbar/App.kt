@@ -5,13 +5,18 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeContent
 import androidx.compose.foundation.layout.safeContentPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -73,6 +78,8 @@ fun App() {
         var alwaysVisible by remember { mutableStateOf(false) }
         var showLabel by remember { mutableStateOf(true) }
         var shortContainer by remember { mutableStateOf(false) }
+        // Lets the list run under the gesture bar, to check the track stays out of that zone.
+        var edgeToEdge by remember { mutableStateOf(false) }
         // Long-press the thumb and drag it across to move the bar. A real app would persist this.
         var edge by remember { mutableStateOf(FastScrollEdge.END) }
         val onEdgeChange: (FastScrollEdge) -> Unit = { edge = it }
@@ -83,7 +90,16 @@ fun App() {
             Column(
                 modifier = Modifier
                     .background(MaterialTheme.colorScheme.surface)
-                    .safeContentPadding()
+                    .then(
+                        if (edgeToEdge) {
+                            // No bottom padding: the list reaches the bottom of the screen.
+                            Modifier.windowInsetsPadding(
+                                WindowInsets.safeContent.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
+                            )
+                        } else {
+                            Modifier.safeContentPadding()
+                        },
+                    )
                     .fillMaxSize(),
             ) {
                 Controls(
@@ -95,6 +111,7 @@ fun App() {
                     alwaysVisible = alwaysVisible, onAlwaysVisible = { alwaysVisible = it },
                     showLabel = showLabel, onShowLabel = { showLabel = it },
                     shortContainer = shortContainer, onShortContainer = { shortContainer = it },
+                    edgeToEdge = edgeToEdge, onEdgeToEdge = { edgeToEdge = it },
                 )
 
                 val style = ScrollbarDefaults.style(
@@ -130,6 +147,7 @@ private fun Controls(
     alwaysVisible: Boolean, onAlwaysVisible: (Boolean) -> Unit,
     showLabel: Boolean, onShowLabel: (Boolean) -> Unit,
     shortContainer: Boolean, onShortContainer: (Boolean) -> Unit,
+    edgeToEdge: Boolean, onEdgeToEdge: (Boolean) -> Unit,
 ) {
     Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp)) {
         ChipRow {
@@ -149,6 +167,7 @@ private fun Controls(
             FilterChip(selected = alwaysVisible, onClick = { onAlwaysVisible(!alwaysVisible) }, label = { Text("Always visible") })
             FilterChip(selected = showLabel, onClick = { onShowLabel(!showLabel) }, label = { Text("Label") })
             FilterChip(selected = shortContainer, onClick = { onShortContainer(!shortContainer) }, label = { Text("Short") })
+            FilterChip(selected = edgeToEdge, onClick = { onEdgeToEdge(!edgeToEdge) }, label = { Text("Edge-to-edge") })
         }
     }
 }

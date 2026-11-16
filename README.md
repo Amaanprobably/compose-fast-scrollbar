@@ -15,6 +15,7 @@ A draggable fast scrollbar for Compose Multiplatform lazy layouts. One modifier,
 - Optional label bubble next to the thumb while dragging (a letter, date or section name), with a haptic tick when you cross into a new section.
 - Fully styleable: thickness, colors, timings and edge placement.
 - Use your own brand icon or logo as the thumb, with separate idle and dragging icons.
+- Plays well with Android gesture navigation: the visible thumb is excluded from the back gesture, and the track stays out of the top and bottom system gesture zones, so grabbing it never sends you back or home.
 - Mouse support (desktop, and mice on Android and iPad): hovering reveals the bar and highlights the thumb, hovering the track previews the label for that spot, and clicking the track jumps there. Wheel and trackpad scrolling always reach the list, and touch behavior is unchanged.
 - No recomposition while scrolling or dragging. All state is read in the draw phase.
 
@@ -142,6 +143,8 @@ LazyColumn(
 ) { /* ... */ }
 ```
 
+You don't need to add the system gesture insets yourself. If the list reaches the top or bottom of the screen, the track automatically stays out of the gesture zones there (and a horizontal bar is lifted above the bottom one). The larger of your padding and the gesture zone is used, not the sum, so passing insets as `contentPadding` never pushes the track in twice.
+
 ### Styling
 
 ```kotlin
@@ -219,6 +222,8 @@ ScrollbarDefaults.style(
 
 - **Position accuracy:** lazy layouts only know the size of items they've measured, so dragging maps the thumb to an item using the average item size. With uniform items it's exact, and with variable sizes the list can land slightly off the thumb.
 - **Grids:** the number of items per line is estimated from the visible items. Grids with full-span headers or uneven spans may land slightly off while dragging.
+- **iOS screen edges:** iOS has no way for apps to reserve part of a screen edge, unlike Android. A bar on the left edge (in right-to-left languages, or after users move it there) can compete with the swipe-back gesture. The default right-side placement in left-to-right layouts doesn't.
+- **Collapsing toolbars:** fast-scrolling jumps the list straight to its target instead of scrolling through nested scroll, so nested-scroll effects like a collapsing toolbar (`TopAppBar` scroll behaviors) don't react to it. Swiping the list still drives them as usual.
 
 ## Roadmap
 

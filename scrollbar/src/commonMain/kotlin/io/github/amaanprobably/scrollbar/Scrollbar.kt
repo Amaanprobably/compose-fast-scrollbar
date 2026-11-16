@@ -10,6 +10,8 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.stopScroll
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.mandatorySystemGestures
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.runtime.Composable
@@ -45,8 +47,13 @@ import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.isPrimaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
@@ -765,6 +772,15 @@ private const val EDGE_MOVE_MIN_HOLD_MILLIS = 500L
 private val MOVE_HINT_RADIUS = 14.dp
 private val MOVE_HINT_GAP = 8.dp
 
+/** Below this fade the bar counts as hidden: it can't be grabbed and doesn't block system gestures. */
+private const val GRABBABLE_ALPHA = 0.05f
+
+/**
+ * Extra length kept protected from system edge gestures past each end of the thumb, so the
+ * protected area only needs updating every so often while the thumb moves.
+ */
+private val EDGE_GUARD_SLACK = 24.dp
+
 /** How far a hovered thumb moves toward its pressed look (0 = none, 1 = fully pressed). */
 private const val HOVER_HIGHLIGHT = 0.5f
 
@@ -813,6 +829,60 @@ private fun ScrollbarTarget.scrollToProgress(
     return key
 }
 
+// SYSTEM GESTURES
+
+/**
+ * Keeps system edge gestures (Android's back swipe) from taking touches that start on the thumb.
+ * Android implements it with system gesture exclusion; other platforms have no such API and use
+ * [NoEdgeGestureGuard].
+ */
+internal interface EdgeGestureGuard {
+    /** Protects this area, in the coordinates of the Compose root (the hosting view). */
+    fun protect(left: Float, top: Float, right: Float, bottom: Float)
+
+    /** Stops protecting anything. */
+    fun clear()
+}
+
+internal object NoEdgeGestureGuard : EdgeGestureGuard {
+    override fun protect(left: Float, top: Float, right: Float, bottom: Float) = Unit
+    override fun clear() = Unit
+}
+
+@Composable
+internal expect fun rememberEdgeGestureGuard(): EdgeGestureGuard
+
+/** True when the protected span still covers the thumb, so it doesn't need updating. */
+internal fun guardCoversThumb(guardStart: Float, guardEnd: Float, thumbStart: Float, thumbEnd: Float): Boolean =
+    !guardStart.isNaN() && thumbStart >= guardStart && thumbEnd <= guardEnd
+
+/** The span to protect around the thumb: the thumb plus [slack] on both ends, kept inside the list. */
+internal fun guardSpanStart(thumbStart: Float, slack: Float): Float = (thumbStart - slack).coerceAtLeast(0f)
+
+internal fun guardSpanEnd(thumbEnd: Float, slack: Float, containerLength: Float): Float =
+    (thumbEnd + slack).coerceAtMost(containerLength)
+
+/**
+ * How much of the list overlaps the screen's top and bottom system gesture zones (where the
+ * system's gestures always win, like Android's home swipe), in pixels. Updated after layout.
+ */
+internal class GestureZoneOverlap {
+    var top = 0f
+    var bottom = 0f
+}
+
+/** Overlap of a list starting at [listTop] with a top gesture zone [zoneHeight] tall. */
+internal fun topGestureZoneOverlap(listTop: Float, listHeight: Float, zoneHeight: Float): Float =
+    (zoneHeight - listTop).coerceIn(0f, listHeight.coerceAtLeast(0f))
+
+/** Overlap of a list with a bottom gesture zone [zoneHeight] tall, at the bottom of the window. */
+internal fun bottomGestureZoneOverlap(
+    listTop: Float,
+    listHeight: Float,
+    rootHeight: Float,
+    zoneHeight: Float,
+): Float = (listTop + listHeight - (rootHeight - zoneHeight)).coerceIn(0f, listHeight.coerceAtLeast(0f))
+
 // CONTROLLER AND CONFIG
 
 /**
@@ -860,6 +930,65 @@ private class ScrollbarController(
     fun displayedFraction(sizing: ThumbSizing, rawFraction: Float): Float =
         if (sizing is ThumbSizing.Proportional && sizing.smoothed) smoothedFraction.value
         else rawFraction
+
+    /** Where the list sits in the Compose root, for system gesture exclusion. Set after layout. */
+    var positionInRoot = Offset.Zero
+
+    /** Overlap with the top and bottom system gesture zones. Set after layout. */
+    val gestureZones = GestureZoneOverlap()
+
+    // The area currently protected from system edge gestures, in list coordinates (NaN = none).
+    private var guardedMainStart = Float.NaN
+    private var guardedMainEnd = Float.NaN
+    private var guardedCrossStart = Float.NaN
+    private var guardedCrossEnd = Float.NaN
+    private var guardedOrigin = Offset.Unspecified
+
+    /**
+     * Protects the thumb's touch area from system edge gestures. Cheap to call every frame: the
+     * guard is only updated when the thumb leaves the protected span, the strip changes, or the
+     * list moves.
+     */
+    fun protectThumb(
+        guard: EdgeGestureGuard,
+        isVertical: Boolean,
+        thumbStart: Float,
+        thumbEnd: Float,
+        crossStart: Float,
+        crossEnd: Float,
+        containerLength: Float,
+        slack: Float,
+    ) {
+        val origin = positionInRoot
+        if (guardCoversThumb(guardedMainStart, guardedMainEnd, thumbStart, thumbEnd) &&
+            crossStart == guardedCrossStart && crossEnd == guardedCrossEnd && origin == guardedOrigin
+        ) {
+            return
+        }
+        val mainStart = guardSpanStart(thumbStart, slack)
+        val mainEnd = guardSpanEnd(thumbEnd, slack, containerLength)
+        guardedMainStart = mainStart
+        guardedMainEnd = mainEnd
+        guardedCrossStart = crossStart
+        guardedCrossEnd = crossEnd
+        guardedOrigin = origin
+        if (isVertical) {
+            guard.protect(origin.x + crossStart, origin.y + mainStart, origin.x + crossEnd, origin.y + mainEnd)
+        } else {
+            guard.protect(origin.x + mainStart, origin.y + crossStart, origin.x + mainEnd, origin.y + crossEnd)
+        }
+    }
+
+    /** Hidden or not drawn: the edge belongs to the system again. */
+    fun releaseThumb(guard: EdgeGestureGuard) {
+        if (guardedMainStart.isNaN()) return
+        guardedMainStart = Float.NaN
+        guardedMainEnd = Float.NaN
+        guardedCrossStart = Float.NaN
+        guardedCrossEnd = Float.NaN
+        guardedOrigin = Offset.Unspecified
+        guard.clear()
+    }
 
     // Mouse hover. None of this is used for touch.
     /** True while the mouse is over the bar's strip. Keeps the bar visible, like a drag does. */
@@ -1181,6 +1310,7 @@ internal class ScrollbarConfig(
     val label: ScrollbarLabel?,
     val hasMore: Boolean,
     val onEdgeChange: ((FastScrollEdge) -> Unit)?,
+    val gestureZones: GestureZoneOverlap = GestureZoneOverlap(),
 ) {
     /** Largest thumb progress. Below 1 while more items can still load. */
     val endCap: Float get() = if (hasMore) HAS_MORE_END_CAP else 1f
@@ -1211,16 +1341,53 @@ internal class ScrollbarConfig(
             ThumbAppearance.Bar, is ThumbAppearance.Icon -> style.trackPadding
         }
 
-    fun mainAxisStartPadding(isVertical: Boolean): Dp =
-        (if (isVertical) contentPadding.calculateTopPadding()
-        else contentPadding.calculateLeftPadding(layoutDirection)) + thumbEndPadding
+    /**
+     * Where the track starts, in pixels: past the content padding and, for vertical lists, past
+     * the top system gesture zone. The larger of the two is used, not the sum, so passing the
+     * system insets as content padding doesn't push the track in twice.
+     */
+    fun mainAxisStartPaddingPx(density: Density, isVertical: Boolean): Float = with(density) {
+        val content = (
+                if (isVertical) contentPadding.calculateTopPadding()
+                else contentPadding.calculateLeftPadding(layoutDirection)
+                ).toPx()
+        val zone = if (isVertical) gestureZones.top else 0f
+        max(content, zone) + thumbEndPadding.toPx()
+    }
 
-    fun mainAxisEndPadding(isVertical: Boolean): Dp =
-        (if (isVertical) contentPadding.calculateBottomPadding()
-        else contentPadding.calculateRightPadding(layoutDirection)) + thumbEndPadding
+    /** Where the track ends: the same rule at the bottom (or right). */
+    fun mainAxisEndPaddingPx(density: Density, isVertical: Boolean): Float = with(density) {
+        val content = (
+                if (isVertical) contentPadding.calculateBottomPadding()
+                else contentPadding.calculateRightPadding(layoutDirection)
+                ).toPx()
+        val zone = if (isVertical) gestureZones.bottom else 0f
+        max(content, zone) + thumbEndPadding.toPx()
+    }
+
+    /**
+     * Lifts a horizontal bar out of the top or bottom system gesture zone, so grabbing it can't
+     * trigger Android's home swipe. Vertical bars sit at the side edges, where the edge guard
+     * handles the back gesture instead.
+     */
+    fun crossZoneInsetPx(isVertical: Boolean): Float = when {
+        isVertical -> 0f
+        isCrossAxisAtOrigin(isVertical = false) -> gestureZones.top
+        else -> gestureZones.bottom
+    }
 }
 
 // INPUT HELPERS: shared by touch, mouse press and mouse hover, so they agree on where the thumb is.
+
+/** How wide the strip along the bar's edge that accepts input is, across the scroll axis. */
+internal fun Density.barStripThickness(style: ScrollbarStyle, isVertical: Boolean): Float {
+    // An icon wider than the touch target must still be grabbable across its whole width.
+    val iconCrossExtent = (style.thumbAppearance as? ThumbAppearance.Icon)
+        ?.let { icon ->
+            (if (isVertical) icon.size.width else icon.size.height).toPx() + style.edgePadding.toPx()
+        } ?: 0f
+    return max(style.touchTargetThickness.toPx(), iconCrossExtent)
+}
 
 /** True when [crossPosition] is inside the strip along the bar's edge that accepts input. */
 internal fun Density.isInBarStrip(
@@ -1229,15 +1396,9 @@ internal fun Density.isInBarStrip(
     crossLength: Float,
     crossPosition: Float,
 ): Boolean {
-    val style = config.style
-    // An icon wider than the touch target must still be grabbable across its whole width.
-    val iconCrossExtent = (style.thumbAppearance as? ThumbAppearance.Icon)
-        ?.let { icon ->
-            (if (isVertical) icon.size.width else icon.size.height).toPx() + style.edgePadding.toPx()
-        } ?: 0f
-    val thickness = max(style.touchTargetThickness.toPx(), iconCrossExtent)
-    return if (config.isCrossAxisAtOrigin(isVertical)) crossPosition <= thickness
-    else crossPosition >= crossLength - thickness
+    val reach = config.crossZoneInsetPx(isVertical) + barStripThickness(config.style, isVertical)
+    return if (config.isCrossAxisAtOrigin(isVertical)) crossPosition <= reach
+    else crossPosition >= crossLength - reach
 }
 
 /** Size of the thumb across the scroll axis: the capsule, or the icon. */
@@ -1255,9 +1416,10 @@ internal fun Density.restingCrossStart(
     isVertical: Boolean,
     crossLength: Float,
     thumbCrossLength: Float,
-): Float =
-    if (config.isCrossAxisAtOrigin(isVertical)) config.style.edgePadding.toPx()
-    else crossLength - thumbCrossLength - config.style.edgePadding.toPx()
+): Float {
+    val inset = config.style.edgePadding.toPx() + config.crossZoneInsetPx(isVertical)
+    return if (config.isCrossAxisAtOrigin(isVertical)) inset else crossLength - thumbCrossLength - inset
+}
 
 /** The hint goes on the thumb's end side (right or bottom) while the thumb is in the first half. */
 internal fun moveHintOnEndSide(thumbCrossCenter: Float, crossLength: Float): Boolean =
@@ -1309,8 +1471,8 @@ private fun Density.layoutThumbForInput(
     geometry.set(
         density = this,
         containerLength = containerLength,
-        startPadding = config.mainAxisStartPadding(isVertical).toPx(),
-        endPadding = config.mainAxisEndPadding(isVertical).toPx(),
+        startPadding = config.mainAxisStartPaddingPx(this, isVertical),
+        endPadding = config.mainAxisEndPaddingPx(this, isVertical),
         sizing = style.thumbSizing,
         fraction = controller.displayedFraction(style.thumbSizing, metrics.thumbFraction),
         visualProgress = visualProgress(metrics.progress * config.endCap, config.isMirrored(target)),
@@ -1355,15 +1517,24 @@ private fun Modifier.scrollbarFor(
     val scope = rememberCoroutineScope()
     val textMeasurer = rememberTextMeasurer()
 
+    val controller = remember(scope) { ScrollbarController(scope, style) }
+
     val config = ScrollbarConfig(
         style, contentPadding, minItemsToShow, edge, layoutDirection, label, hasMore, onEdgeChange,
+        gestureZones = controller.gestureZones,
     )
     val latestConfig by rememberUpdatedState(config)
 
-    val controller = remember(scope) { ScrollbarController(scope, style) }
+    // Android: keeps the back gesture off the visible thumb. A no-op elsewhere.
+    val edgeGuard = rememberEdgeGestureGuard()
+    // Where the system's gestures always win (Android's home swipe, for example).
+    val gestureInsets = WindowInsets.mandatorySystemGestures
+    val density = LocalDensity.current
+    val windowInfo = LocalWindowInfo.current
 
     SideEffect { controller.style = style }
     DisposableEffect(controller) { onDispose { controller.close() } }
+    DisposableEffect(controller, edgeGuard) { onDispose { controller.releaseThumb(edgeGuard) } }
 
     // Switches between auto-hide and always-visible without restarting anything else.
     LaunchedEffect(controller, style.visibility) {
@@ -1416,7 +1587,7 @@ private fun Modifier.scrollbarFor(
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
 
             // Not visible means not grabbable.
-            if (controller.fade.value < 0.05f) return@awaitEachGesture
+            if (controller.fade.value < GRABBABLE_ALPHA) return@awaitEachGesture
 
             val currentConfig = latestConfig
             val isVertical = target.isVertical
@@ -1445,7 +1616,7 @@ private fun Modifier.scrollbarFor(
                 return@awaitEachGesture
             }
             val isMirrored = currentConfig.isMirrored(target)
-            val startPadding = currentConfig.mainAxisStartPadding(isVertical).toPx()
+            val startPadding = currentConfig.mainAxisStartPaddingPx(this, isVertical)
             val trackLength = geometry.trackLength
             val shownFraction =
                 controller.displayedFraction(currentConfig.style.thumbSizing, metrics.thumbFraction)
@@ -1687,7 +1858,7 @@ private fun Modifier.scrollbarFor(
                     lastPreviewIndex = Int.MIN_VALUE
                     continue
                 }
-                val startPadding = config.mainAxisStartPadding(isVertical).toPx()
+                val startPadding = config.mainAxisStartPaddingPx(this, isVertical)
                 val isMirrored = config.isMirrored(target)
                 val shown = centeredProgress(hoverGeometry, startPadding, main, isMirrored)
                 val index = keyIndex(
@@ -1728,8 +1899,31 @@ private fun Modifier.scrollbarFor(
         )
         if (actions.isEmpty()) Modifier else Modifier.semantics { customActions = actions }
     }
+    // After layout: where the list sits (for the edge guard) and how much of it overlaps the top
+    // and bottom system gesture zones (to keep the track out of them).
+    // Insets are measured from the window's edges, so the overlap uses the list's position in the
+    // window (a Compose view may not start at the top of the window). The edge guard uses the
+    // position in the Compose root instead, because that's the hosting view's coordinate space.
+    val positionModifier = Modifier.onGloballyPositioned { coordinates ->
+        controller.positionInRoot = coordinates.positionInRoot()
+        val listTop = coordinates.positionInWindow().y
+        val listHeight = coordinates.size.height.toFloat()
+        controller.gestureZones.top = topGestureZoneOverlap(
+            listTop = listTop,
+            listHeight = listHeight,
+            zoneHeight = gestureInsets.getTop(density).toFloat(),
+        )
+        controller.gestureZones.bottom = bottomGestureZoneOverlap(
+            listTop = listTop,
+            listHeight = listHeight,
+            rootHeight = windowInfo.containerSize.height.toFloat(),
+            zoneHeight = gestureInsets.getBottom(density).toFloat(),
+        )
+    }
+
     return this
         .then(accessibilityModifier)
+        .then(positionModifier)
         .then(pointerModifier)
         .then(hoverModifier)
         .drawWithContent {
@@ -1747,12 +1941,16 @@ private fun Modifier.scrollbarFor(
                 fraction = controller.frozenFraction
                 progress = (controller.dragProgress + controller.glide.value).coerceIn(0f, 1f)
             } else {
-                val indicator = target.state.scrollIndicatorState ?: return@drawWithContent
+                val indicator = target.state.scrollIndicatorState ?: run {
+                    controller.releaseThumb(edgeGuard)
+                    return@drawWithContent
+                }
                 val content = indicator.contentSize.toFloat()
                 val viewport = indicator.viewportSize.toFloat()
                 val itemCount = target.totalItemsCount
                 if (viewport <= 0f || content <= viewport || itemCount <= config.minItemsToShow) {
                     controller.lastDrawnCount = NO_BASELINE // nothing drawn, nothing to compare
+                    controller.releaseThumb(edgeGuard)
                     return@drawWithContent
                 }
 
@@ -1777,7 +1975,10 @@ private fun Modifier.scrollbarFor(
                 controller.noteShownProgress(itemCount, endCap, live)
 
                 alpha = controller.fade.value
-                if (alpha <= 0f) return@drawWithContent
+                if (alpha <= 0f) {
+                    controller.releaseThumb(edgeGuard)
+                    return@drawWithContent
+                }
 
                 fraction = controller.displayedFraction(style.thumbSizing, viewport / content)
                 // After release, glide from where the finger left to the real position.
@@ -1795,14 +1996,17 @@ private fun Modifier.scrollbarFor(
             geometry.set(
                 density = this,
                 containerLength = containerLength,
-                startPadding = config.mainAxisStartPadding(isVertical).toPx(),
-                endPadding = config.mainAxisEndPadding(isVertical).toPx(),
+                startPadding = config.mainAxisStartPaddingPx(this, isVertical),
+                endPadding = config.mainAxisEndPaddingPx(this, isVertical),
                 sizing = style.thumbSizing,
                 fraction = fraction,
                 visualProgress = visualProgress(progress, isMirrored),
                 lengthOverride = this.iconMainAxisLength(style, isVertical),
             )
-            if (geometry.length <= 0f) return@drawWithContent
+            if (geometry.length <= 0f) {
+                controller.releaseThumb(edgeGuard)
+                return@drawWithContent
+            }
 
             val pressed = controller.press.value
             // Hovering the thumb with a mouse shows part of the pressed look.
@@ -1817,6 +2021,24 @@ private fun Modifier.scrollbarFor(
                 restingCrossStart = restingCrossStart(config, isVertical, crossLength, thumbCrossLength),
                 thumbCrossLength = thumbCrossLength,
             )
+
+            // While the thumb can be grabbed, keep system edge gestures (Android's back swipe) off
+            // its touch strip. Hidden, the edge belongs to the system again.
+            if (alpha >= GRABBABLE_ALPHA) {
+                val reach = config.crossZoneInsetPx(isVertical) + barStripThickness(style, isVertical)
+                controller.protectThumb(
+                    guard = edgeGuard,
+                    isVertical = isVertical,
+                    thumbStart = geometry.start,
+                    thumbEnd = geometry.start + geometry.length,
+                    crossStart = if (atOrigin) 0f else (crossLength - reach).coerceAtLeast(0f),
+                    crossEnd = if (atOrigin) reach.coerceAtMost(crossLength) else crossLength,
+                    containerLength = containerLength,
+                    slack = EDGE_GUARD_SLACK.toPx(),
+                )
+            } else {
+                controller.releaseThumb(edgeGuard)
+            }
 
             when (appearance) {
                 is ThumbAppearance.Icon -> {
