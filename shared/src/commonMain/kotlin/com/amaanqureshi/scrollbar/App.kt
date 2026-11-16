@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.only
-import androidx.compose.foundation.layout.safeContent
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.safeContentPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -78,8 +78,10 @@ fun App() {
         var alwaysVisible by remember { mutableStateOf(false) }
         var showLabel by remember { mutableStateOf(true) }
         var shortContainer by remember { mutableStateOf(false) }
-        // Lets the list run under the gesture bar, to check the track stays out of that zone.
-        var edgeToEdge by remember { mutableStateOf(false) }
+        // Like a typical app: only the top is padded, so the list reaches the side edges (the back
+        // gesture zones) and runs under the gesture bar. Off, safeContentPadding() pads every side
+        // by the gesture zones too, which keeps the bar away from the back gesture entirely.
+        var edgeToEdge by remember { mutableStateOf(true) }
         // Long-press the thumb and drag it across to move the bar. A real app would persist this.
         var edge by remember { mutableStateOf(FastScrollEdge.END) }
         val onEdgeChange: (FastScrollEdge) -> Unit = { edge = it }
@@ -92,10 +94,7 @@ fun App() {
                     .background(MaterialTheme.colorScheme.surface)
                     .then(
                         if (edgeToEdge) {
-                            // No bottom padding: the list reaches the bottom of the screen.
-                            Modifier.windowInsetsPadding(
-                                WindowInsets.safeContent.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
-                            )
+                            Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
                         } else {
                             Modifier.safeContentPadding()
                         },
