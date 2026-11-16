@@ -261,10 +261,12 @@ class ScrollbarStyle internal constructor(
     val capsuleColor: Color,
 )
 
-/** True on desktop (JVM). Set per platform in androidMain, iosMain and desktopMain. */
-internal expect val isDesktopPlatform: Boolean
+/** Where the library is running. Each target sets it in androidMain, iosMain or desktopMain. */
+internal enum class Platform { Android, Ios, Desktop }
 
-/** The look and size defaults, which differ between touch and mouse. */
+internal expect val currentPlatform: Platform
+
+/** The look and size defaults, which differ per platform. */
 internal class StyleDefaults(
     val thumbAppearance: ThumbAppearance,
     val thumbThickness: Dp,
@@ -277,8 +279,8 @@ internal class StyleDefaults(
     val capsuleExtraLength: Dp,
 )
 
-/** Finger-sized: a big grab target, like the platform fast scrollers. */
-internal val TouchDefaults = StyleDefaults(
+/** Android: a finger-sized capsule with a thumb inside, like the platform fast scroller. */
+internal val AndroidDefaults = StyleDefaults(
     thumbAppearance = ThumbAppearance.Default,
     thumbThickness = 5.dp,
     pressedThumbThickness = 8.dp,
@@ -287,6 +289,22 @@ internal val TouchDefaults = StyleDefaults(
     trackPadding = 8.dp,
     edgePadding = 4.dp,
     capsuleThickness = 32.dp,
+    capsuleExtraLength = 16.dp,
+)
+
+/**
+ * iOS: a thin bar that widens when grabbed, like the system scroll indicator, with the same
+ * finger-sized grab area as Android.
+ */
+internal val IosDefaults = StyleDefaults(
+    thumbAppearance = ThumbAppearance.Bar,
+    thumbThickness = 3.dp,
+    pressedThumbThickness = 8.dp,
+    thumbLength = 40.dp,
+    touchTargetThickness = 48.dp,
+    trackPadding = 6.dp,
+    edgePadding = 3.dp,
+    capsuleThickness = 32.dp, // unused by Bar, kept for apps that switch to Default
     capsuleExtraLength = 16.dp,
 )
 
@@ -303,15 +321,20 @@ internal val CompactDefaults = StyleDefaults(
     capsuleExtraLength = 8.dp,
 )
 
-/** Compact on desktop, touch-sized on Android and iOS. */
-internal val PlatformDefaults: StyleDefaults get() = if (isDesktopPlatform) CompactDefaults else TouchDefaults
+/** The defaults for the platform the library is running on. */
+internal val PlatformDefaults: StyleDefaults
+    get() = when (currentPlatform) {
+        Platform.Android -> AndroidDefaults
+        Platform.Ios -> IosDefaults
+        Platform.Desktop -> CompactDefaults
+    }
 
 object ScrollbarDefaults {
     /**
-     * The default style. It follows the platform: a single thin [ThumbAppearance.Bar] on desktop,
-     * a finger-sized capsule ([ThumbAppearance.Default]) on Android and iOS. Use [compactStyle]
-     * for the desktop look everywhere, or pass `thumbAppearance = ThumbAppearance.Bar` to keep the
-     * touch sizes with a plain bar.
+     * The default style. It follows the platform: a finger-sized capsule
+     * ([ThumbAppearance.Default]) on Android, a thin [ThumbAppearance.Bar] that widens when
+     * grabbed on iOS, and a mouse-sized bar on desktop. Use [compactStyle] for the desktop look
+     * everywhere, or pass `thumbAppearance` to pick a look yourself.
      *
      * It is a plain function, so it can be hoisted into a top-level `val` and shared.
      */
@@ -352,18 +375,36 @@ object ScrollbarDefaults {
     )
 
     /**
-     * Picks [desktop] on desktop and [touch] on Android and iOS, so a multiplatform app can set
-     * both looks in one place, without its own platform checks:
+     * Picks the style for the platform the app runs on, so a multiplatform app can set every look
+     * in one place, without its own platform checks. Each argument is a full style, so anything
+     * can differ per platform. Pass only the platforms you want to change; the others keep their
+     * built-in [style]:
      *
      * ```
      * val scrollbarStyle = ScrollbarDefaults.platformStyle(
-     *     touch = ScrollbarDefaults.style(thumbColor = Color.Gray),
-     *     desktop = ScrollbarDefaults.compactStyle(thumbColor = Color.DarkGray),
+     *     android = ScrollbarDefaults.style(
+     *         thumbAppearance = ThumbAppearance.Bar,
+     *         visibility = ScrollbarVisibility.Always,
+     *     ),
+     *     ios = ScrollbarDefaults.style(
+     *         thumbAppearance = ThumbAppearance.Icon(idle = logoPainter, size = DpSize(32.dp, 32.dp)),
+     *     ),
+     *     desktop = ScrollbarDefaults.compactStyle(
+     *         thumbSizing = ThumbSizing.Proportional(),
+     *         hideDelay = 3.seconds,
+     *     ),
      * )
      * ```
      */
-    fun platformStyle(touch: ScrollbarStyle, desktop: ScrollbarStyle): ScrollbarStyle =
-        if (isDesktopPlatform) desktop else touch
+    fun platformStyle(
+        android: ScrollbarStyle = style(),
+        ios: ScrollbarStyle = style(),
+        desktop: ScrollbarStyle = style(),
+    ): ScrollbarStyle = when (currentPlatform) {
+        Platform.Android -> android
+        Platform.Ios -> ios
+        Platform.Desktop -> desktop
+    }
 
     /**
      * The desktop look on every platform: a single thin bar with a mouse-sized grab area. It's

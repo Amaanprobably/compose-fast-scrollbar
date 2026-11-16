@@ -157,22 +157,31 @@ Modifier.scrollbar(
 )
 ```
 
-The look follows the platform: a single thin bar on desktop, a finger-sized capsule with a thumb inside on Android and iOS. Pick a look yourself with `thumbAppearance`:
+The look follows the platform: a capsule with a thumb inside on Android, a thin bar that widens when grabbed on iOS (like the system scroll indicator), and a mouse-sized bar on desktop. Pick a look yourself with `thumbAppearance`:
 
-| Appearance                  | Look                                                                        |
-|-----------------------------|-----------------------------------------------------------------------------|
-| `ThumbAppearance.Default`   | Translucent capsule with a thin thumb inside. The touch default.            |
-| `ThumbAppearance.Bar`       | One rounded bar, no capsule. The desktop default. Widens on hover and drag. |
-| `ThumbAppearance.Icon(...)` | Your own icon or logo.                                                      |
+| Appearance                  | Look                                                                                |
+|-----------------------------|-------------------------------------------------------------------------------------|
+| `ThumbAppearance.Default`   | Translucent capsule with a thin thumb inside. The Android default.                  |
+| `ThumbAppearance.Bar`       | One rounded bar, no capsule. The iOS and desktop default. Widens on hover and drag. |
+| `ThumbAppearance.Icon(...)` | Your own icon or logo.                                                              |
 
 `ScrollbarDefaults.compactStyle()` gives the full desktop look (thin bar, mouse-sized grab area) everywhere. For a plain bar with a finger-sized grab area on mobile, use `style(thumbAppearance = ThumbAppearance.Bar)`.
 
-Want a different style on desktop and on phones? Set both in one place, with no platform checks of your own:
+Want a different style per platform? Set them in one place, with no platform checks of your own. Each one is a full style, so anything can differ: the look, sizing, visibility, colors and timings. Pass only the platforms you want to change, and the others keep their built-in look:
 
 ```kotlin
 val scrollbarStyle = ScrollbarDefaults.platformStyle(
-    touch = ScrollbarDefaults.style(thumbColor = Color.Gray),
-    desktop = ScrollbarDefaults.compactStyle(thumbColor = Color.DarkGray),
+    android = ScrollbarDefaults.style(
+        thumbAppearance = ThumbAppearance.Bar,
+        visibility = ScrollbarVisibility.Always,
+    ),
+    ios = ScrollbarDefaults.style(
+        thumbAppearance = ThumbAppearance.Icon(idle = logoPainter, size = DpSize(32.dp, 32.dp)),
+    ),
+    desktop = ScrollbarDefaults.compactStyle(
+        thumbSizing = ThumbSizing.Proportional(),
+        hideDelay = 3.seconds,
+    ),
 )
 ```
 

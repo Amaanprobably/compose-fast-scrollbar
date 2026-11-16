@@ -10,6 +10,7 @@ import androidx.compose.ui.unit.dp
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 private val testDensity = Density(1f) // 1 dp == 1 px
@@ -208,17 +209,45 @@ class StyleDefaultsTest {
 
     @Test
     fun defaultStyleFollowsThePlatform() {
-        val expected = if (isDesktopPlatform) ThumbAppearance.Bar else ThumbAppearance.Default
+        val expected = when (currentPlatform) {
+            Platform.Android -> ThumbAppearance.Default
+            Platform.Ios, Platform.Desktop -> ThumbAppearance.Bar
+        }
         assertEquals(expected, ScrollbarDefaults.style().thumbAppearance)
         assertEquals(expected, DefaultScrollbarStyle.thumbAppearance)
     }
 
     @Test
+    fun iosBarIsThinAndWidensWhenGrabbed() {
+        assertEquals(ThumbAppearance.Bar, IosDefaults.thumbAppearance)
+        assertTrue(IosDefaults.thumbThickness < IosDefaults.pressedThumbThickness)
+        assertEquals(48.dp, IosDefaults.touchTargetThickness, "a finger-sized grab area")
+    }
+
+    @Test
     fun platformStylePicksTheStyleForThisPlatform() {
-        val touch = ScrollbarDefaults.style(thumbColor = Color.Red)
+        val android = ScrollbarDefaults.style(thumbColor = Color.Red)
+        val ios = ScrollbarDefaults.style(thumbColor = Color.Green)
         val desktop = ScrollbarDefaults.compactStyle(thumbColor = Color.Blue)
-        val expected = if (isDesktopPlatform) desktop else touch
-        assertTrue(ScrollbarDefaults.platformStyle(touch, desktop) === expected)
+        val expected = when (currentPlatform) {
+            Platform.Android -> android
+            Platform.Ios -> ios
+            Platform.Desktop -> desktop
+        }
+        val picked = ScrollbarDefaults.platformStyle(android = android, ios = ios, desktop = desktop)
+        assertSame(picked, expected)
+    }
+
+    @Test
+    fun platformStyleKeepsTheBuiltInLookForPlatformsLeftOut() {
+        // Only one platform customized: everywhere else gets the platform's own default look.
+        val picked = ScrollbarDefaults.platformStyle(
+            desktop = ScrollbarDefaults.compactStyle(thumbColor = Color.Blue),
+        )
+        if (currentPlatform != Platform.Desktop) {
+            assertEquals(ScrollbarDefaults.style().thumbAppearance, picked.thumbAppearance)
+            assertEquals(ScrollbarDefaults.style().thumbColor, picked.thumbColor)
+        }
     }
 
     @Test

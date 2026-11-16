@@ -1,3 +1,3 @@
 package io.github.amaanprobably.scrollbar
 
-internal actual val isDesktopPlatform: Boolean = true
+internal actual val currentPlatform: Platform = Platform.Desktop
