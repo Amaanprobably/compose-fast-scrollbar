@@ -228,8 +228,8 @@ enum class TrackFit {
 
 /**
  * What the track (the path the thumb moves along) looks like. It's drawn under the thumb, centered
- * on it across the scroll axis, and fades in and out with it.
- * It is only decoration: touches on it behave exactly as without it.
+ * on it across the scroll axis, and fades in and out with it. It is only decoration: touches on
+ * it behave exactly as without it.
  */
 @Immutable
 sealed interface TrackAppearance {
@@ -860,6 +860,16 @@ private const val NO_LENGTH_OVERRIDE = -1f
  */
 internal const val SCROLL_TO_END_OFFSET = 1_000_000_000
 
+/**
+ * No bounce, settles in about 300 ms. The threshold is far below a pixel: the default (0.01) would
+ * end the glide 1% of the track early and snap the last few pixels.
+ */
+private val GLIDE_SPRING = spring(
+    dampingRatio = Spring.DampingRatioNoBouncy,
+    stiffness = Spring.StiffnessMediumLow,
+    visibilityThreshold = 0.0001f,
+)
+
 /** Marks that the draw phase has no previous frame to compare with. */
 private const val NO_BASELINE = -1
 
@@ -1020,6 +1030,34 @@ private class ScrollbarController(
      */
     val glide = Animatable(0f)
     private var glideJob: Job? = null
+
+    /**
+     * A new glide offset waiting for [glide] to take it over, or NaN. `snapTo` can't apply until a
+     * cancelled glide has let go, which can be a frame later, and that frame would draw the jump
+     * the glide exists to hide. Plain field: it's only read together with [glide].
+     */
+    private var pendingGlide = Float.NaN
+
+    /** The offset to draw. Reads [glide] every time, so the draw keeps observing it. */
+    val glideOffset: Float
+        get() {
+            val animated = glide.value
+            return if (pendingGlide.isNaN()) animated else pendingGlide
+        }
+
+    /** Shows [offset] from the very next frame, then runs [then] once [glide] holds it. */
+    private fun replaceGlide(offset: Float, lowerBound: Float, upperBound: Float, then: suspend () -> Unit) {
+        glideJob?.cancel()
+        pendingGlide = offset
+        // UNDISPATCHED, so it applies immediately when nothing else holds the glide.
+        glideJob = scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            // Set before snapTo, which clamps to the current bounds.
+            glide.updateBounds(lowerBound = lowerBound, upperBound = upperBound)
+            glide.snapTo(offset)
+            pendingGlide = Float.NaN
+            then()
+        }
+    }
 
     // What the previous non-drag frame drew. Plain fields on purpose: nothing observes them.
     var lastDrawnCount = NO_BASELINE
@@ -1224,14 +1262,23 @@ private class ScrollbarController(
         }
     }
 
-    /** Starts a glide that hides a jump of [delta] (old position minus new position). */
+    /**
+     * Starts a glide that hides a jump of [delta] (old position minus new position). A spring
+     * carries over the running glide's speed, so jumps arriving in quick succession (a burst of
+     * inserts) blend into one smooth movement instead of restarting from a standstill each time.
+     */
     fun startGlide(delta: Float) {
         if (abs(delta) < 0.002f) return
-        glideJob?.cancel()
-        // UNDISPATCHED so the offset is in place before the next draw reads it.
-        glideJob = scope.launch(start = CoroutineStart.UNDISPATCHED) {
-            glide.snapTo((glide.value + delta).coerceIn(-1f, 1f))
-            glide.animateTo(0f, tween(250))
+        // Read before cancelling: a cancelled animation forgets its velocity.
+        val velocity = glide.velocity
+        val offset = (glideOffset + delta).coerceIn(-1f, 1f)
+        // Only carry speed that heads toward the real position. Speed the other way (left over
+        // from a change in the opposite direction) would push the thumb backwards first.
+        val towardZero = if (velocity * offset < 0f) velocity else 0f
+        // A spring with carried speed can overshoot. Bounding it between the offset and 0 stops it
+        // on the real position instead, so the thumb never passes it and comes back.
+        replaceGlide(offset, lowerBound = min(offset, 0f), upperBound = max(offset, 0f)) {
+            glide.animateTo(0f, GLIDE_SPRING, initialVelocity = towardZero)
         }
     }
 
@@ -1321,8 +1368,7 @@ private class ScrollbarController(
     }
 
     fun beginDrag(progress: Float) {
-        glideJob?.cancel()
-        glideJob = scope.launch(start = CoroutineStart.UNDISPATCHED) { glide.snapTo(0f) }
+        replaceGlide(0f, lowerBound = 0f, upperBound = 0f) {}
         lastDrawnCount = NO_BASELINE
         dragProgress = progress
         dragging = true
@@ -1330,12 +1376,11 @@ private class ScrollbarController(
     }
 
     fun endDrag() {
-        settleFrom = (dragProgress + glide.value).coerceIn(0f, 1f)
-        glideJob?.cancel()
+        settleFrom = (dragProgress + glideOffset).coerceIn(0f, 1f)
+        replaceGlide(0f, lowerBound = 0f, upperBound = 0f) {}
         lastDrawnCount = NO_BASELINE
         // UNDISPATCHED so settle is 1f before the next draw (no one-frame flash).
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
-            glide.snapTo(0f)
             settle.snapTo(1f)
             settle.animateTo(0f, tween(150))
         }
@@ -2090,7 +2135,7 @@ private fun Modifier.scrollbarFor(
                 // The thumb follows the finger, not the live scroll offset, while dragging.
                 alpha = 1f
                 fraction = controller.frozenFraction
-                progress = (controller.dragProgress + controller.glide.value).coerceIn(0f, 1f)
+                progress = (controller.dragProgress + controller.glideOffset).coerceIn(0f, 1f)
             } else {
                 val indicator = target.state.scrollIndicatorState ?: run {
                     controller.releaseThumb(edgeGuard)
@@ -2136,7 +2181,7 @@ private fun Modifier.scrollbarFor(
                 // The glide offset hides jumps from item count changes.
                 progress = (
                         lerp(live, controller.settleFrom, controller.settle.value) +
-                                controller.glide.value
+                                controller.glideOffset
                         ).coerceIn(0f, 1f)
             }
 
