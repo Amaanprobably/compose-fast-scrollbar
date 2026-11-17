@@ -38,6 +38,8 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -82,6 +84,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -197,6 +200,92 @@ sealed interface ThumbAppearance {
 }
 
 /**
+ * How much of the track [TrackAppearance] draws.
+ */
+enum class TrackExtent {
+    /** The whole track, from where the thumb can start to where it can end. */
+    Full,
+
+    /**
+     * From the start of the list up to the middle of the thumb, so the track grows as you scroll,
+     * like a rope the thumb hangs from (or Wukong's growing staff). For `reverseLayout`
+     * (and right-to-left rows), the start is the bottom (or right), where the list starts.
+     */
+    UpToThumb,
+}
+
+/** How [TrackAppearance.Image] fills the track along the scroll axis. */
+enum class TrackFit {
+    /** One copy of the image, stretched to the track's length. Good for lines, webs and ropes. */
+    Stretch,
+
+    /**
+     * Copies of the image placed end to end, keeping their proportions, for patterns that would
+     * look smeared when stretched, like a ladder, a chain or a brick tower.
+     */
+    Repeat,
+}
+
+/**
+ * What the track (the path the thumb moves along) looks like. It's drawn under the thumb, centered
+ * on it across the scroll axis, and fades in and out with it.
+ * It is only decoration: touches on it behave exactly as without it.
+ */
+@Immutable
+sealed interface TrackAppearance {
+    /** No visible track. The default. */
+    data object None : TrackAppearance
+
+    /** A plain rounded line. */
+    @Immutable
+    class Line(
+        val color: Color = Color(0x33808080),
+        val thickness: Dp = 2.dp,
+        val extent: TrackExtent = TrackExtent.Full,
+    ) : TrackAppearance {
+        init {
+            require(thickness > 0.dp) { "thickness must be positive" }
+        }
+    }
+
+    /**
+     * Your own drawing as the track, for example a web for a spider thumb or a pole for a
+     * character sliding down it.
+     *
+     * - [thickness] is its size across the scroll axis.
+     * - With [TrackFit.Repeat], [tileLength] is the length of one copy along the scroll axis.
+     *   Leave it unspecified to keep the painter's own proportions (or a square, when the painter
+     *   has no intrinsic size).
+     * - [tint] recolors it. Leave it [Color.Unspecified] to keep its own colors.
+     * - It's never rotated or mirrored, only positioned: draw it upright for vertical lists and
+     *   sideways for horizontal ones.
+     * - A track wider than the space between the thumb and the list's edge is moved inward, so it
+     *   never draws outside the list.
+     *
+     * Painters should be created with `remember` (as `painterResource` and `rememberVectorPainter`
+     * already do). Animated painters work, because the track is drawn every frame while visible.
+     */
+    @Stable
+    class Image(
+        val painter: Painter,
+        val thickness: Dp,
+        val extent: TrackExtent = TrackExtent.Full,
+        val fit: TrackFit = TrackFit.Stretch,
+        val tileLength: Dp = Dp.Unspecified,
+        val tint: Color = Color.Unspecified,
+    ) : TrackAppearance {
+        init {
+            require(thickness > 0.dp) { "thickness must be positive" }
+            require(tileLength.value.isNaN() || tileLength > 0.dp) { "tileLength must be positive" }
+        }
+
+        // Built once, not per frame.
+        internal val colorFilter: ColorFilter? =
+            if (tint.isSpecified) ColorFilter.tint(tint) else null
+    }
+}
+
+/**
  * When the scrollbar is visible. Either way it only shows when the list can actually scroll and
  * has more than `minItemsToShow` items.
  */
@@ -250,6 +339,9 @@ class ScrollbarLabel(
  *
  * The capsule parameters only apply to [ThumbAppearance.Default]. [ThumbAppearance.Bar] uses the
  * thumb thickness, color and [ThumbSizing] parameters. [ThumbAppearance.Icon] replaces all of them.
+ *
+ * [trackAppearance] adds an optional visible track under the thumb, with any look. It's
+ * [TrackAppearance.None] (invisible) by default.
  */
 @Stable
 class ScrollbarStyle internal constructor(
@@ -269,6 +361,7 @@ class ScrollbarStyle internal constructor(
     val thumbColor: Color,
     val pressedThumbColor: Color,
     val capsuleColor: Color,
+    val trackAppearance: TrackAppearance,
 )
 
 /** Where the library is running. Each target sets it in androidMain, iosMain or desktopMain. */
@@ -290,9 +383,9 @@ internal class StyleDefaults(
 )
 
 /**
- * Android: a capsule with a thumb inside, like the platform fast scroller.
- * The capsule is 24dp wide and 64dp long (40dp thumb + 24dp), so it covers little content.
- * The 48dp touch strip keeps it easy to grab.
+ * Android: a capsule with a thumb inside, like the platform fast scroller. The capsule is 24dp
+ * wide and 64dp long (40dp thumb + 24dp), close to Google's own 24dp x 63dp drag handle, so it
+ * covers little content. The 48dp touch strip keeps it easy to grab.
  */
 internal val AndroidDefaults = StyleDefaults(
     thumbAppearance = ThumbAppearance.Default,
@@ -369,6 +462,7 @@ object ScrollbarDefaults {
         thumbColor: Color = Color(0x80808080),
         pressedThumbColor: Color = Color(0xFF2196F3),
         capsuleColor: Color = Color(0x2E808080),
+        trackAppearance: TrackAppearance = TrackAppearance.None,
     ): ScrollbarStyle = ScrollbarStyle(
         thumbThickness = thumbThickness,
         pressedThumbThickness = pressedThumbThickness,
@@ -386,6 +480,7 @@ object ScrollbarDefaults {
         thumbColor = thumbColor,
         pressedThumbColor = pressedThumbColor,
         capsuleColor = capsuleColor,
+        trackAppearance = trackAppearance,
     )
 
     /**
@@ -442,6 +537,7 @@ object ScrollbarDefaults {
         thumbColor: Color = Color(0x80808080),
         pressedThumbColor: Color = Color(0xFF2196F3),
         capsuleColor: Color = Color(0x2E808080),
+        trackAppearance: TrackAppearance = TrackAppearance.None,
     ): ScrollbarStyle = style(
         thumbThickness = thumbThickness,
         pressedThumbThickness = pressedThumbThickness,
@@ -459,6 +555,7 @@ object ScrollbarDefaults {
         thumbColor = thumbColor,
         pressedThumbColor = pressedThumbColor,
         capsuleColor = capsuleColor,
+        trackAppearance = trackAppearance,
     )
 }
 
@@ -708,6 +805,9 @@ internal class ThumbGeometry {
     var length = 0f
     var trackLength = 0f
 
+    /** Where the thumb's travel begins along the scroll axis (its start at progress 0). */
+    var trackStart = 0f
+
     fun set(
         density: Density,
         containerLength: Float,
@@ -719,6 +819,7 @@ internal class ThumbGeometry {
         lengthOverride: Float,
     ) {
         val usable = (containerLength - startPadding - endPadding).coerceAtLeast(0f)
+        trackStart = startPadding
         if (usable <= 0f) {
             start = startPadding; length = 0f; trackLength = 0f
             return
@@ -750,6 +851,14 @@ internal fun Density.resolveThumbLength(
 }
 
 private const val NO_LENGTH_OVERRIDE = -1f
+
+/**
+ * Offset used to reach the end of the list. Asking for "last item, offset 0" only lines up the
+ * last item's top with the top of the list, which is a valid stopping point when that item is
+ * taller than the list, so its bottom could never be reached. An offset far past any item makes
+ * the list clamp to its true end instead. Small enough to never overflow inside the list.
+ */
+internal const val SCROLL_TO_END_OFFSET = 1_000_000_000
 
 /** Marks that the draw phase has no previous frame to compare with. */
 private const val NO_BASELINE = -1
@@ -799,7 +908,7 @@ internal fun scrollTargetKey(metrics: ScrollMetrics, progress: Float): Long {
     val offset: Int
     when {
         progress <= 0f -> { index = 0; offset = 0 }
-        progress >= 1f -> { index = metrics.itemCount - 1; offset = 0 } // list clamps to the true end
+        progress >= 1f -> { index = metrics.itemCount - 1; offset = SCROLL_TO_END_OFFSET }
         else -> {
             val targetOffset = progress * metrics.maxScroll
             val line = (targetOffset / metrics.averageLineLength).toInt()
@@ -1377,6 +1486,48 @@ internal class ScrollbarConfig(
     }
 }
 
+// TRACK: where the optional visible track goes. Pure functions, so they're unit tested.
+
+/** Where the visible part of the track starts along the scroll axis, in screen order. */
+internal fun trackDrawStart(extent: TrackExtent, geometry: ThumbGeometry, isMirrored: Boolean): Float =
+    when {
+        extent == TrackExtent.UpToThumb && isMirrored -> geometry.start + geometry.length / 2f
+        else -> geometry.trackStart
+    }
+
+/** Where the visible part of the track ends along the scroll axis, in screen order. */
+internal fun trackDrawEnd(extent: TrackExtent, geometry: ThumbGeometry, isMirrored: Boolean): Float =
+    when {
+        extent == TrackExtent.UpToThumb && !isMirrored -> geometry.start + geometry.length / 2f
+        else -> geometry.trackStart + geometry.trackLength + geometry.length
+    }
+
+/** Centers the track on the thumb across the scroll axis, moved inward if it would leave the list. */
+internal fun trackCrossStart(thickness: Float, thumbCrossCenter: Float, crossLength: Float): Float =
+    (thumbCrossCenter - thickness / 2f).coerceIn(0f, (crossLength - thickness).coerceAtLeast(0f))
+
+/**
+ * Length of one repeated copy along the scroll axis: [tileLength] when given (> 0), otherwise the
+ * painter's own proportions at [thickness], otherwise a square. Pass NaN for unknown sizes.
+ */
+internal fun repeatTileLength(
+    tileLength: Float,
+    intrinsicMain: Float,
+    intrinsicCross: Float,
+    thickness: Float,
+): Float {
+    val length = when {
+        tileLength > 0f -> tileLength
+        intrinsicMain > 0f && intrinsicCross > 0f && intrinsicMain.isFinite() && intrinsicCross.isFinite() ->
+            thickness * intrinsicMain / intrinsicCross
+        else -> thickness
+    }
+    return length.coerceAtLeast(MIN_TRACK_TILE_LENGTH)
+}
+
+/** Keeps a tiny tile from turning one frame into thousands of draws. */
+internal const val MIN_TRACK_TILE_LENGTH = 2f
+
 // INPUT HELPERS: shared by touch, mouse press and mouse hover, so they agree on where the thumb is.
 
 /** How wide the strip along the bar's edge that accepts input is, across the scroll axis. */
@@ -1891,8 +2042,8 @@ private fun Modifier.scrollbarFor(
             },
             scrollToEndLabel?.let { label ->
                 CustomAccessibilityAction(label) {
-                    // The list clamps this to the true end.
-                    target.requestScrollToItem((target.totalItemsCount - 1).coerceAtLeast(0), 0)
+                    // The list clamps this to its true end, even past a tall last item.
+                    target.requestScrollToItem((target.totalItemsCount - 1).coerceAtLeast(0), SCROLL_TO_END_OFFSET)
                     true
                 }
             },
@@ -2040,6 +2191,16 @@ private fun Modifier.scrollbarFor(
                 controller.releaseThumb(edgeGuard)
             }
 
+            // The optional track goes under the thumb, centered on it, so it follows an edge move.
+            drawTrack(
+                track = style.trackAppearance,
+                isVertical = isVertical,
+                geometry = geometry,
+                isMirrored = isMirrored,
+                thumbCrossCenter = thumbCrossStart + thumbCrossLength / 2f,
+                alpha = alpha,
+            )
+
             when (appearance) {
                 is ThumbAppearance.Icon -> {
                     drawThumbIcon(
@@ -2157,6 +2318,83 @@ private fun pointOf(isVertical: Boolean, main: Float, cross: Float): Offset =
 
 private fun sizeOf(isVertical: Boolean, mainLength: Float, crossLength: Float): Size =
     if (isVertical) Size(crossLength, mainLength) else Size(mainLength, crossLength)
+
+/** Draws the visible track, if any: a line, or a painter stretched or repeated along it. */
+private fun DrawScope.drawTrack(
+    track: TrackAppearance,
+    isVertical: Boolean,
+    geometry: ThumbGeometry,
+    isMirrored: Boolean,
+    thumbCrossCenter: Float,
+    alpha: Float,
+) {
+    val extent: TrackExtent
+    val thickness: Float
+    when (track) {
+        TrackAppearance.None -> return
+        is TrackAppearance.Line -> {
+            extent = track.extent
+            thickness = track.thickness.toPx()
+        }
+        is TrackAppearance.Image -> {
+            extent = track.extent
+            thickness = track.thickness.toPx()
+        }
+    }
+    val from = trackDrawStart(extent, geometry, isMirrored)
+    val length = trackDrawEnd(extent, geometry, isMirrored) - from
+    if (length <= 0f) return
+
+    val crossLength = if (isVertical) size.width else size.height
+    val crossStart = trackCrossStart(thickness, thumbCrossCenter, crossLength)
+    val topLeft = pointOf(isVertical, from, crossStart)
+    val trackSize = sizeOf(isVertical, length, thickness)
+
+    when (track) {
+        TrackAppearance.None -> Unit
+        is TrackAppearance.Line -> drawRoundRect(
+            color = track.color,
+            topLeft = topLeft,
+            size = trackSize,
+            cornerRadius = CornerRadius(thickness / 2f),
+            alpha = alpha,
+        )
+        is TrackAppearance.Image -> when (track.fit) {
+            TrackFit.Stretch -> translate(left = topLeft.x, top = topLeft.y) {
+                drawPainter(track.painter, trackSize, alpha, track.colorFilter)
+            }
+            TrackFit.Repeat -> {
+                val intrinsic = track.painter.intrinsicSize
+                val hasIntrinsic = intrinsic != Size.Unspecified
+                val tile = repeatTileLength(
+                    tileLength = if (track.tileLength.value.isNaN()) Float.NaN else track.tileLength.toPx(),
+                    intrinsicMain = if (!hasIntrinsic) Float.NaN else if (isVertical) intrinsic.height else intrinsic.width,
+                    intrinsicCross = if (!hasIntrinsic) Float.NaN else if (isVertical) intrinsic.width else intrinsic.height,
+                    thickness = thickness,
+                )
+                val tileSize = sizeOf(isVertical, tile, thickness)
+                // Anchored at the list's start, so the pattern stays still while an UpToThumb
+                // track grows and shrinks. That start is at the far end for mirrored lists.
+                val step = if (isMirrored) -tile else tile
+                var position = if (isMirrored) from + length - tile else from
+                clipRect(
+                    left = topLeft.x,
+                    top = topLeft.y,
+                    right = topLeft.x + trackSize.width,
+                    bottom = topLeft.y + trackSize.height,
+                ) {
+                    repeat(ceil(length / tile).toInt()) {
+                        val tileTopLeft = pointOf(isVertical, position, crossStart)
+                        translate(left = tileTopLeft.x, top = tileTopLeft.y) {
+                            drawPainter(track.painter, tileSize, alpha, track.colorFilter)
+                        }
+                        position += step
+                    }
+                }
+            }
+        }
+    }
+}
 
 /**
  * Draws the icon centered on the thumb position. The idle and dragging icons crossfade with the

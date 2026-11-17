@@ -106,8 +106,17 @@ internal enum class Showcase(
         accent = Brand.Pink,
         onAccent = Color.White,
     ),
-    Playground(
+    Track(
         number = "07",
+        title = "Hang on",
+        blurb = "Give the track a look too: a rope that grows with the thumb, or a full ladder.",
+        hint = "Scroll and watch the rope grow. Switch to the ladder or reverse the list.",
+        tags = listOf("track", "up to thumb", "repeat"),
+        accent = Color(0xFFFF8A00),
+        onAccent = Brand.Ink,
+    ),
+    Playground(
+        number = "08",
         title = "Playground",
         blurb = "Every option on one screen: RTL, reverse, padding, sizes and more.",
         hint = "Mix the options and try to break it.",

@@ -25,6 +25,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.lerp
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.TouchInjectionScope
@@ -147,6 +149,62 @@ class ScrollbarUiTest {
         }
         waitForIdle()
         assertFalse(state.canScrollForward, "should be at the end")
+    }
+
+    @Test
+    fun aVisibleTrackDoesNotChangeDragging() = runComposeUiTest {
+        // A repeated image track that grows with the thumb: exercises the whole track drawing
+        // path on every frame of the drag, and must leave the input exactly as without it.
+        val trackStyle = ScrollbarDefaults.style(
+            thumbAppearance = ThumbAppearance.Default,
+            thumbSizing = ThumbSizing.Fixed(40.dp),
+            trackPadding = 8.dp,
+            touchTargetThickness = 48.dp,
+            edgePadding = 4.dp,
+            capsuleThickness = 32.dp,
+            capsuleExtraLength = 16.dp,
+            visibility = ScrollbarVisibility.Always,
+            trackAppearance = TrackAppearance.Image(
+                painter = ColorPainter(Color.Red),
+                thickness = 12.dp,
+                extent = TrackExtent.UpToThumb,
+                fit = TrackFit.Repeat,
+            ),
+        )
+        lateinit var state: LazyListState
+        setContent {
+            state = rememberLazyListState()
+            TestList(state, itemCount = 10_000, style = trackStyle)
+        }
+        onNodeWithTag(LIST_TAG).performTouchInput {
+            drag(thumbAtTop(), Offset(right - 10f, bottom * 2))
+        }
+        waitForIdle()
+        assertFalse(state.canScrollForward, "should be at the end")
+    }
+
+    @Test
+    fun aLastItemTallerThanTheListCanBeDraggedToItsBottom() = runComposeUiTest {
+        lateinit var state: LazyListState
+        setContent {
+            state = rememberLazyListState()
+            LazyColumn(
+                state = state,
+                modifier = Modifier
+                    .windowInsetsPadding(WindowInsets.safeDrawing.union(WindowInsets.mandatorySystemGestures))
+                    .size(300.dp, 600.dp)
+                    .testTag(LIST_TAG)
+                    .scrollbar(state, style = uiTestStyle),
+            ) {
+                items(500) { Box(Modifier.fillMaxWidth().height(50.dp)) }
+                item { Box(Modifier.fillMaxWidth().height(2_000.dp)) } // more than three screens tall
+            }
+        }
+        onNodeWithTag(LIST_TAG).performTouchInput {
+            drag(thumbAtTop(), Offset(right - 10f, bottom * 2))
+        }
+        waitForIdle()
+        assertFalse(state.canScrollForward, "should reach the very bottom of the tall last item")
     }
 
     @Test

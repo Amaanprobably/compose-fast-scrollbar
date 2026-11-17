@@ -56,6 +56,7 @@ fun App(
                 Showcase.Playlist -> PlaylistScreen(goHome)
                 Showcase.Notes -> NotesScreen(goHome)
                 Showcase.Shelf -> ShelfScreen(goHome)
+                Showcase.Track -> TrackScreen(goHome)
                 Showcase.Playground -> PlaygroundScreen(goHome)
             }
         }

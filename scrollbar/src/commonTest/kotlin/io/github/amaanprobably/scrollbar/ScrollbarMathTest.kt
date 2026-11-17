@@ -85,7 +85,8 @@ class ScrollTargetKeyTest {
     fun endMapsToLastItem() {
         val key = scrollTargetKey(list, 1f)
         assertEquals(99, keyIndex(key))
-        assertEquals(0, keyOffset(key))
+        // A huge offset, so the list clamps to its true end even past a tall last item.
+        assertEquals(SCROLL_TO_END_OFFSET, keyOffset(key))
     }
 
     @Test

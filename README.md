@@ -15,6 +15,7 @@ A draggable fast scrollbar for Compose Multiplatform lazy layouts. One modifier,
 - Optional label bubble next to the thumb while dragging (a letter, date or section name), with a haptic tick when you cross into a new section.
 - Fully styleable: thickness, colors, timings and edge placement.
 - Use your own brand icon or logo as the thumb, with separate idle and dragging icons.
+- Optional visible track with any look: a plain line, or your own drawing stretched or repeated along it. Show it full length, or only up to the thumb so the thumb hangs from it like a rope.
 - Plays well with Android gesture navigation: the visible thumb is excluded from the back gesture, and the track stays out of the top and bottom system gesture zones, so grabbing it never sends you back or home.
 - Mouse support (desktop, and mice on Android and iPad): hovering reveals the bar and highlights the thumb, hovering the track previews the label for that spot, and clicking the track jumps there. Wheel and trackpad scrolling always reach the list, and touch behavior is unchanged.
 - No recomposition while scrolling or dragging. All state is read in the draw phase.
@@ -196,6 +197,32 @@ ScrollbarDefaults.style(
     pressedThumbColor = MaterialTheme.colorScheme.primary,
 )
 ```
+
+### Visible track
+
+The track is invisible by default. Give it a look with `trackAppearance`, for example a rope your icon thumb hangs from:
+
+```kotlin
+ScrollbarDefaults.style(
+    thumbAppearance = ThumbAppearance.Icon(idle = climberPainter, size = DpSize(40.dp, 40.dp)),
+    trackAppearance = TrackAppearance.Image(
+        painter = painterResource(Res.drawable.rope),
+        thickness = 8.dp,
+        extent = TrackExtent.UpToThumb,
+        fit = TrackFit.Repeat,
+    ),
+)
+```
+
+| Option        | Choices                                                                                                                                                                    |
+|---------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Look          | `TrackAppearance.None` (default), `Line(color, thickness)`, or `Image(painter, thickness)`                                                                                 |
+| `extent`      | `Full`: the whole track. `UpToThumb`: from the start of the list to the middle of the thumb, so it grows as you scroll. On `reverseLayout` lists it grows from the bottom. |
+| `fit` (Image) | `Stretch`: one copy, stretched. Good for lines, webs and ropes. `Repeat`: copies end to end, keeping their proportions. Good for ladders, chains and towers.               |
+
+Any `Painter` works, so no custom drawing code is needed. Have an SVG? Import it as a vector drawable (Android Studio → New → Vector Asset), put it in `composeResources/drawable/`, and load it with `painterResource`. PNGs and `ImageVector`s (through `rememberVectorPainter`) work too.
+
+The track is drawn under the thumb and centered on it, so it follows when the bar is moved to the other edge. It's never rotated: draw it upright for vertical lists and sideways for horizontal ones. It's only decoration, so touches behave exactly as without it.
 
 ### Thumb sizing
 

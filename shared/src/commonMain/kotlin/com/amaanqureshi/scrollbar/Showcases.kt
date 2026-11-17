@@ -495,7 +495,7 @@ internal fun NotesScreen(onBack: () -> Unit) {
 }
 
 @Composable
-private fun NoteCard(note: Note) {
+internal fun NoteCard(note: Note) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
