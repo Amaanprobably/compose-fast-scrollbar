@@ -47,7 +47,6 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import io.github.amaanprobably.scrollbar.scrollbar
 
 /** The gallery: a big header, then one bold card per showcase. */
 @Composable
@@ -68,7 +67,6 @@ internal fun HomeScreen(listState: LazyListState, onOpen: (Showcase) -> Unit) {
                 // Wide desktop windows: keep the cards a readable width.
                 .widthIn(max = 640.dp)
                 .fillMaxSize()
-                .scrollbar(listState, contentPadding = padding, minItemsToShow = 0, style = brandScrollbarStyle()),
         ) {
             item(key = "hero") { Hero() }
             items(Showcase.entries, key = { it.name }) { showcase ->

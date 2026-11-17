@@ -42,6 +42,8 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Demo app only: signed with the debug key so anyone can install a release build.
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
     compileOptions {
