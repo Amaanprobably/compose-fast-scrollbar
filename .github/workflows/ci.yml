@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  # Manual runs from the Actions tab. Tick "Run iOS tests" to also run the macOS job.
+  workflow_dispatch:
+    inputs:
+      ios:
+        description: Run iOS tests (macOS runner, uses about 10x the free allowance per minute)
+        type: boolean
+        default: true
+
+# A newer push to the same branch cancels the run still in progress.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Desktop (all unit and UI tests) and Android host (unit tests). Cheap, runs on every push.
+  jvm:
+    name: Desktop and Android host tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      # Caches Gradle downloads and build outputs between runs.
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Run tests
+        run: ./gradlew :scrollbar:desktopTest :scrollbar:testAndroidHostTest --stacktrace
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jvm-test-reports
+          path: scrollbar/build/reports/tests/
+
+  # iOS simulator tests. macOS minutes are expensive on a private repo, so manual runs only.
+  ios:
+    name: iOS simulator tests
+    if: github.event_name == 'workflow_dispatch' && inputs.ios
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Kotlin/Native downloads its compiler and toolchain here; caching saves several minutes.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
+
+      - name: Run tests
+        run: ./gradlew :scrollbar:iosSimulatorArm64Test --stacktrace
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-test-reports
+          path: scrollbar/build/reports/tests/
