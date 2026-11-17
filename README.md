@@ -1,4 +1,4 @@
-# Scrollbar
+# Compose Fast Scroller
 
 A draggable fast scrollbar for Compose Multiplatform lazy layouts. One modifier, no wrapper composable, works on Android, iOS and Desktop.
 
@@ -22,14 +22,18 @@ A draggable fast scrollbar for Compose Multiplatform lazy layouts. One modifier,
 
 ## Installation
 
-Not published yet. Once it is, it will look like this (`<version>` and the artifact name are placeholders):
+Not published yet. Once it is:
 
 ```kotlin
 // commonMain
 dependencies {
-    implementation("io.github.amaanprobably:scrollbar:<version>")
+    implementation("io.github.Amaanprobably:compose-fast-scroller:0.1.0")
 }
 ```
+
+> **0.x versions:** the API may still change between minor versions until 1.0. Breaking changes are listed in the [changelog](CHANGELOG.md).
+
+**Plain Android apps (no Multiplatform):** the same line works in your app module. The library is built on Compose 1.12, so Gradle raises your app's Compose dependencies to at least 1.12.1 if they're older.
 
 **Supported targets:** Android (minSdk 24), iOS (`iosArm64`, `iosSimulatorArm64`) and Desktop (JVM).
 
@@ -220,7 +224,9 @@ ScrollbarDefaults.style(
 | `extent`      | `Full`: the whole track. `UpToThumb`: from the start of the list to the middle of the thumb, so it grows as you scroll. On `reverseLayout` lists it grows from the bottom. |
 | `fit` (Image) | `Stretch`: one copy, stretched. Good for lines, webs and ropes. `Repeat`: copies end to end, keeping their proportions. Good for ladders, chains and towers.               |
 
-Any `Painter` works, so no custom drawing code is needed. Have an SVG? Import it as a vector drawable (Android Studio → New → Vector Asset), put it in `composeResources/drawable/`, and load it with `painterResource`. PNGs and `ImageVector`s (through `rememberVectorPainter`) work too.
+Any `Painter` works, so no custom drawing code is needed. 
+
+Have an SVG? Import it as a vector drawable (Android Studio → New → Vector Asset), put it in `composeResources/drawable/`, and load it with `painterResource`. PNGs and `ImageVector`s (through `rememberVectorPainter`) work too.
 
 The track is drawn under the thumb and centered on it, so it follows when the bar is moved to the other edge. It's never rotated: draw it upright for vertical lists and sideways for horizontal ones. It's only decoration, so touches behave exactly as without it.
 
@@ -247,6 +253,7 @@ The track is drawn under the thumb and centered on it, so it follows when the ba
 
 ## Known limitations
 
+- **Best on long lists:** fast scrolling pays off when content is at least 4 screens tall (roughly 50+ items), like Android's own fast scroller. On short lists with very uneven items, the estimated position can visibly shift. Raise `minItemsToShow` to hide the bar on lists like that.
 - **Position accuracy:** lazy layouts only know the size of items they've measured, so dragging maps the thumb to an item using the average item size. With uniform items it's exact, and with variable sizes the list can land slightly off the thumb.
 - **Grids:** the number of items per line is estimated from the visible items. Grids with full-span headers or uneven spans may land slightly off while dragging.
 - **iOS screen edges:** iOS has no way for apps to reserve part of a screen edge, unlike Android. A bar on the left edge (in right-to-left languages, or after users move it there) can compete with the swipe-back gesture. The default right-side placement in left-to-right layouts doesn't.
@@ -254,9 +261,11 @@ The track is drawn under the thumb and centered on it, so it follows when the ba
 
 ## Roadmap
 
+- Plain `ScrollState` support (`Column` with `verticalScroll`), with exact positions
+- `LazyVerticalStaggeredGrid` support
+- TalkBack and VoiceOver actions, and keyboard support on desktop
 - Fine scrub: move the finger sideways to drag the thumb slower, for precise landing (opt-in)
-- Overscroll squash at the ends
-- TalkBack and VoiceOver actions
+- Section snapping (opt-in)
 
 ## Project structure
 
@@ -276,9 +285,14 @@ The track is drawn under the thumb and centered on it, so it follows when the ba
 ### Running tests
 
 - Android: `./gradlew :scrollbar:testAndroidHostTest`
+- Android device or emulator (includes UI and back-gesture tests): `./gradlew :scrollbar:connectedAndroidDeviceTest`
 - Desktop: `./gradlew :scrollbar:desktopTest`
 - iOS: `./gradlew :scrollbar:iosSimulatorArm64Test` (requires macOS)
 
 ## License
 
-To be decided before the first release.
+Copyright 2026 Amaan Qureshi
+
+Licensed under the [Apache License, Version 2.0](LICENSE). You can use this library in any app, commercial or open source. 
+
+If you redistribute it or a modified version, keep the copyright notice and the [NOTICE](NOTICE) file.
