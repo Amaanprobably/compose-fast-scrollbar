@@ -1,8 +1,9 @@
 # Compose Fast Scroller
+[![CI](https://github.com/Amaanprobably/compose-fast-scroller/actions/workflows/ci.yml/badge.svg)](https://github.com/Amaanprobably/compose-fast-scroller/actions/workflows/ci.yml)
 
 A draggable fast scrollbar for Compose Multiplatform lazy layouts. One modifier, no wrapper composable, works on Android, iOS and Desktop.
 
-> **Status:** early development. Not published yet, and the iOS target hasn't been tested on real devices.
+> **Status:** early development, not published yet. The full test suite passes on Android, Desktop and the iOS simulator; it hasn't been tried on a real iPhone yet.
 
 ## Features
 
@@ -244,7 +245,7 @@ The track is drawn under the thumb and centered on it, so it follows when the ba
 | `edge`               | `END`                       | Which side of the cross axis the bar sits on. For horizontal lists, `START` is the top and `END` is the bottom. |
 | `contentPadding`     | `0.dp`                      | Padding along the scroll axis that the track stays inside.                                                      |
 | `minItemsToShow`     | `10`                        | The bar stays hidden for lists with this many items or fewer.                                                   |
-| `style`              | `ScrollbarDefaults.style()` | Sizes, colors, timings and the thumb appearance.                                                                |
+| `style`              | `ScrollbarDefaults.style()` | Sizes, colors, timings, and the thumb and track appearance.                                                     |                                                           |
 | `hasMore`            | `false`                     | `true` for feeds that load more as you scroll. See above.                                                       |
 | `label`              | `null`                      | Bubble shown next to the thumb while dragging. See above.                                                       |
 | `onEdgeChange`       | `null`                      | Long-press and drag the thumb across to move the bar to the other edge. See above.                              |
@@ -284,7 +285,7 @@ The track is drawn under the thumb and centered on it, so it follows when the ba
 
 ### Running tests
 
-- Android: `./gradlew :scrollbar:testAndroidHostTest`
+- Android host (unit tests): `./gradlew :scrollbar:testAndroidHostTest`
 - Android device or emulator (includes UI and back-gesture tests): `./gradlew :scrollbar:connectedAndroidDeviceTest`
 - Desktop: `./gradlew :scrollbar:desktopTest`
 - iOS: `./gradlew :scrollbar:iosSimulatorArm64Test` (requires macOS)
