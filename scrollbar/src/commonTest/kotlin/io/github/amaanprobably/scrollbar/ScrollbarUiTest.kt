@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -97,6 +98,21 @@ private fun TestList(
             ),
     ) {
         items(itemCount) { Box(Modifier.fillMaxWidth().height(50.dp)) }
+    }
+}
+
+/** Like [TestList], but keyed by [ids], so inserting at the top keeps the list on the same item. */
+@Composable
+private fun KeyedTestList(state: LazyListState, ids: List<Int>) {
+    LazyColumn(
+        state = state,
+        modifier = Modifier
+            .windowInsetsPadding(WindowInsets.safeDrawing.union(WindowInsets.mandatorySystemGestures))
+            .size(300.dp, 600.dp)
+            .testTag(LIST_TAG)
+            .scrollbar(state, style = uiTestStyle),
+    ) {
+        items(ids.size, key = { ids[it] }) { Box(Modifier.fillMaxWidth().height(50.dp)) }
     }
 }
 
@@ -405,6 +421,64 @@ class ScrollbarUiTest {
         waitForIdle()
         assertEquals(200, state.layoutInfo.totalItemsCount)
         assertFalse(state.canScrollForward, "the drag should continue into the new items")
+    }
+
+    @Test
+    fun itemsInsertedAtTheTopMidDragAreReachableInTheSameDrag() = runComposeUiTest {
+        lateinit var state: LazyListState
+        val ids = mutableStateListOf<Int>().apply { addAll(0 until 100) }
+        setContent {
+            state = rememberLazyListState()
+            KeyedTestList(state, ids)
+        }
+        val list = onNodeWithTag(LIST_TAG)
+        var fingerAt = Offset.Zero
+        list.performTouchInput {
+            val start = thumbAtTop()
+            fingerAt = Offset(right - 10f, bottom / 2)
+            down(start)
+            moveInSteps(start, fingerAt)
+        }
+        waitForIdle()
+
+        // New items arrive above, like an inbox, while the finger is still down.
+        ids.addAll(0, List(100) { -1 - it })
+        waitForIdle()
+
+        list.performTouchInput {
+            val farBelow = Offset(fingerAt.x, bottom * 3)
+            moveInSteps(fingerAt, farBelow)
+            up()
+        }
+        waitForIdle()
+        assertEquals(200, state.layoutInfo.totalItemsCount)
+        assertFalse(state.canScrollForward, "the drag should still reach the end")
+    }
+
+    @Test
+    fun theThumbStaysGrabbableAfterItemsAreInsertedAtTheTop() = runComposeUiTest {
+        lateinit var state: LazyListState
+        val ids = mutableStateListOf<Int>().apply { addAll(0 until 100) }
+        setContent {
+            state = rememberLazyListState(initialFirstVisibleItemIndex = 50)
+            KeyedTestList(state, ids)
+        }
+        waitForIdle()
+
+        ids.addAll(0, List(100) { -1 - it })
+        waitForIdle()
+        // With keys, the list stays on the same item, which is now 100 places further down.
+        assertEquals(150, state.firstVisibleItemIndex)
+
+        // 200 items of 50 dp in a 600 dp list: offset 7,500 of 9,400, so progress is about 0.8.
+        // The track is 600 - 2 * 8 = 584 dp, minus the 40 dp thumb leaves 544 dp of travel, so the
+        // thumb's center is at 8 + 544 * 0.798 + 20 = about 462 dp. If the thumb were drawn
+        // elsewhere, this touch would miss it and swipe the list instead.
+        onNodeWithTag(LIST_TAG).performTouchInput {
+            drag(Offset(right - 10f, 462.dp.toPx()), Offset(right - 10f, bottom * 2))
+        }
+        waitForIdle()
+        assertFalse(state.canScrollForward, "grabbing the thumb where it's drawn should reach the end")
     }
 
     @Test

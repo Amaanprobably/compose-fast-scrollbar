@@ -58,7 +58,10 @@ private enum class Demo(val title: String) {
     Column("Column"),
     Grid("Grid"),
     Row("Row"),
-    Feed("Feed")
+    Feed("Feed"),
+    InsertAtTop("Insert at top"),
+    TwoLists("Two lists"),
+    Heavy("Heavy"),
 }
 
 private val itemCountOptions = listOf(5, 50, 10_000)
@@ -131,6 +134,9 @@ internal fun PlaygroundScreen(onBack: () -> Unit) {
                     Demo.Grid -> GridDemo(itemCount, reverseLayout, withPadding, style, label, edge, onEdgeChange, demoModifier)
                     Demo.Row -> RowDemo(itemCount, reverseLayout, withPadding, style, label, edge, onEdgeChange, demoModifier)
                     Demo.Feed -> FeedDemo(reverseLayout, style, labelStyle, edge, onEdgeChange, demoModifier)
+                    Demo.InsertAtTop -> InsertAtTopDemo(style, labelStyle, edge, onEdgeChange, demoModifier)
+                    Demo.TwoLists -> TwoListsDemo(style, edge, onEdgeChange, demoModifier)
+                    Demo.Heavy -> HeavyGridDemo(style, edge, onEdgeChange, demoModifier)
                 }
             }
         }

@@ -31,7 +31,7 @@ internal object Brand {
     val Amber = Color(0xFFFFB020)
     val Sky = Color(0xFF2E9BFF)
     val Pink = Color(0xFFFF4FA3)
-    val Lime = Color(0xFFC4F042)
+    val Lime = Color(0xFF8DB33A)
     val Ink = Color(0xFF16141D)
     val Cream = Color(0xFFFBF7F0)
 }
