@@ -51,7 +51,7 @@ import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
-import io.github.amaanprobably.scrollbar.FastScrollEdge
+import io.github.amaanprobably.scrollbar.ScrollbarEdge
 import io.github.amaanprobably.scrollbar.ScrollbarLabel
 import io.github.amaanprobably.scrollbar.ScrollbarVisibility
 import io.github.amaanprobably.scrollbar.ThumbAppearance
@@ -375,9 +375,9 @@ internal fun PlaylistScreen(onBack: () -> Unit) {
     val tracks = remember { buildPlaylist() }
     val listState = rememberLazyListState()
     val idle = rememberVectorPainter(LogoIdle)
-    val dragging = rememberVectorPainter(LogoDragging)
-    val appearance = remember(idle, dragging) {
-        ThumbAppearance.Icon(idle = idle, size = DpSize(44.dp, 44.dp), dragging = dragging)
+    val pressed = rememberVectorPainter(LogoDragging)
+    val appearance = remember(idle, pressed) {
+        ThumbAppearance.Icon(idle = idle, size = DpSize(44.dp, 44.dp), pressed = pressed)
     }
     val style = brandScrollbarStyle(thumbAppearance = appearance)
     val labelStyle = brandLabelStyle()
@@ -465,14 +465,14 @@ internal fun NotesScreen(onBack: () -> Unit) {
     val notes = remember { buildNotes() }
     val listState = rememberLazyListState()
     // A real app would persist this, so the bar stays where the user put it.
-    var edge by rememberSaveable { mutableStateOf(FastScrollEdge.END) }
+    var edge by rememberSaveable { mutableStateOf(ScrollbarEdge.End) }
     val padding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = navigationBarBottom() + 16.dp)
 
     DemoScreen(
         showcase = Showcase.Notes,
         onBack = onBack,
         actions = {
-            Tag(if (edge == FastScrollEdge.END) "bar: end" else "bar: start", MaterialTheme.colorScheme.onBackground)
+            Tag(if (edge == ScrollbarEdge.End) "bar: end" else "bar: start", MaterialTheme.colorScheme.onBackground)
         },
     ) {
         LazyColumn(

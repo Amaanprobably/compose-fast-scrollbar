@@ -32,7 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import io.github.amaanprobably.scrollbar.FastScrollEdge
+import io.github.amaanprobably.scrollbar.ScrollbarEdge
 import io.github.amaanprobably.scrollbar.ScrollbarLabel
 import io.github.amaanprobably.scrollbar.ScrollbarLabelStyle
 import io.github.amaanprobably.scrollbar.ScrollbarStyle
@@ -51,8 +51,8 @@ import kotlin.time.Duration.Companion.milliseconds
 internal fun InsertAtTopDemo(
     style: ScrollbarStyle,
     labelStyle: ScrollbarLabelStyle,
-    edge: FastScrollEdge,
-    onEdgeChange: (FastScrollEdge) -> Unit,
+    edge: ScrollbarEdge,
+    onEdgeChange: (ScrollbarEdge) -> Unit,
     modifier: Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -117,8 +117,8 @@ private fun insertLabel(id: Int): String = if (id < 0) "New ${-id}" else "Item $
 @Composable
 internal fun TwoListsDemo(
     style: ScrollbarStyle,
-    edge: FastScrollEdge,
-    onEdgeChange: (FastScrollEdge) -> Unit,
+    edge: ScrollbarEdge,
+    onEdgeChange: (ScrollbarEdge) -> Unit,
     modifier: Modifier,
 ) {
     Column(modifier) {
@@ -151,8 +151,8 @@ internal fun TwoListsDemo(
 @Composable
 internal fun HeavyGridDemo(
     style: ScrollbarStyle,
-    edge: FastScrollEdge,
-    onEdgeChange: (FastScrollEdge) -> Unit,
+    edge: ScrollbarEdge,
+    onEdgeChange: (ScrollbarEdge) -> Unit,
     modifier: Modifier,
 ) {
     val gridState = rememberLazyGridState()

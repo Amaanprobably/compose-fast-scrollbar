@@ -46,7 +46,7 @@ private const val LIST_TAG = "list"
 // Explicit, always-visible style: no fade to wait for, and the same geometry on every platform.
 // Thumb is 40 dp long with 8 dp of track padding, so at rest its center is 28 dp from the edge.
 private val uiTestStyle = ScrollbarDefaults.style(
-    thumbAppearance = ThumbAppearance.Default,
+    thumbAppearance = ThumbAppearance.Capsule,
     thumbSizing = ThumbSizing.Fixed(40.dp),
     trackPadding = 8.dp,
     touchTargetThickness = 48.dp,
@@ -58,7 +58,7 @@ private val uiTestStyle = ScrollbarDefaults.style(
 
 // Same geometry, but hidden until the list scrolls.
 private val uiTestAutoHideStyle = ScrollbarDefaults.style(
-    thumbAppearance = ThumbAppearance.Default,
+    thumbAppearance = ThumbAppearance.Capsule,
     thumbSizing = ThumbSizing.Fixed(40.dp),
     trackPadding = 8.dp,
     touchTargetThickness = 48.dp,
@@ -76,7 +76,7 @@ private fun TestList(
     reverseLayout: Boolean = false,
     hasMore: Boolean = false,
     minItemsToShow: Int = 10,
-    onEdgeChange: ((FastScrollEdge) -> Unit)? = null,
+    onEdgeChange: ((ScrollbarEdge) -> Unit)? = null,
     onComposed: () -> Unit = {},
 ) {
     SideEffect { onComposed() }
@@ -172,7 +172,7 @@ class ScrollbarUiTest {
         // A repeated image track that grows with the thumb: exercises the whole track drawing
         // path on every frame of the drag, and must leave the input exactly as without it.
         val trackStyle = ScrollbarDefaults.style(
-            thumbAppearance = ThumbAppearance.Default,
+            thumbAppearance = ThumbAppearance.Capsule,
             thumbSizing = ThumbSizing.Fixed(40.dp),
             trackPadding = 8.dp,
             touchTargetThickness = 48.dp,
@@ -308,6 +308,36 @@ class ScrollbarUiTest {
         waitForIdle()
         assertEquals(0, state.firstVisibleItemIndex)
         assertEquals(0, state.firstVisibleItemScrollOffset)
+    }
+
+    @Test
+    fun aListWithExactlyMinItemsToShowItemsCanBeGrabbed() = runComposeUiTest {
+        // 20 items of 50 dp scroll in a 600 dp list. minItemsToShow = 20 means 20 is enough.
+        lateinit var state: LazyListState
+        setContent {
+            state = rememberLazyListState()
+            TestList(state, itemCount = 20, minItemsToShow = 20)
+        }
+        onNodeWithTag(LIST_TAG).performTouchInput {
+            drag(thumbAtTop(), Offset(right - 10f, bottom * 2))
+        }
+        waitForIdle()
+        assertFalse(state.canScrollForward, "the bar should show and drag to the end")
+    }
+
+    @Test
+    fun aListWithFewerThanMinItemsToShowItemsHasNoBar() = runComposeUiTest {
+        lateinit var state: LazyListState
+        setContent {
+            state = rememberLazyListState()
+            TestList(state, itemCount = 19, minItemsToShow = 20)
+        }
+        onNodeWithTag(LIST_TAG).performTouchInput {
+            drag(thumbAtTop(), Offset(right - 10f, bottom * 2))
+        }
+        waitForIdle()
+        // No bar to grab: the swipe goes to the list, which is already at the top.
+        assertEquals(0, state.firstVisibleItemIndex)
     }
 
     @Test
@@ -515,7 +545,7 @@ class ScrollbarUiTest {
     @Test
     fun longPressAndDragAcrossMovesTheBarToTheOtherEdge() = runComposeUiTest {
         lateinit var state: LazyListState
-        val edgeChanges = mutableListOf<FastScrollEdge>()
+        val edgeChanges = mutableListOf<ScrollbarEdge>()
         setContent {
             state = rememberLazyListState()
             TestList(state, itemCount = 10_000, onEdgeChange = { edgeChanges += it })
@@ -532,14 +562,14 @@ class ScrollbarUiTest {
             up()
         }
         waitForIdle()
-        assertEquals(listOf(FastScrollEdge.START), edgeChanges)
+        assertEquals(listOf(ScrollbarEdge.Start), edgeChanges)
         assertEquals(0, state.firstVisibleItemIndex, "moving the bar must not scroll")
     }
 
     @Test
     fun aShortHoldDoesNotPickUpTheBar() = runComposeUiTest {
         lateinit var state: LazyListState
-        val edgeChanges = mutableListOf<FastScrollEdge>()
+        val edgeChanges = mutableListOf<ScrollbarEdge>()
         setContent {
             state = rememberLazyListState()
             TestList(state, itemCount = 10_000, onEdgeChange = { edgeChanges += it })
@@ -563,7 +593,7 @@ class ScrollbarUiTest {
     @Test
     fun aQuickGrabAndDragScrollsInsteadOfPickingUpTheBar() = runComposeUiTest {
         lateinit var state: LazyListState
-        val edgeChanges = mutableListOf<FastScrollEdge>()
+        val edgeChanges = mutableListOf<ScrollbarEdge>()
         setContent {
             state = rememberLazyListState()
             TestList(state, itemCount = 10_000, onEdgeChange = { edgeChanges += it })

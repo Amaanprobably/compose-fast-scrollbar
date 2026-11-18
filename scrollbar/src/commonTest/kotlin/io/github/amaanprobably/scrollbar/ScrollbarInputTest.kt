@@ -16,7 +16,7 @@ private val testDensity = Density(1f) // 1 dp == 1 px
 
 // Explicit values, so these tests don't depend on the platform defaults.
 private val testStyle = ScrollbarDefaults.style(
-    thumbAppearance = ThumbAppearance.Default,
+    thumbAppearance = ThumbAppearance.Capsule,
     thumbThickness = 5.dp,
     pressedThumbThickness = 12.dp,
     touchTargetThickness = 48.dp,
@@ -25,7 +25,7 @@ private val testStyle = ScrollbarDefaults.style(
 )
 
 private fun config(
-    edge: FastScrollEdge = FastScrollEdge.END,
+    edge: ScrollbarEdge = ScrollbarEdge.End,
     layoutDirection: LayoutDirection = LayoutDirection.Ltr,
     style: ScrollbarStyle = testStyle,
     contentPadding: PaddingValues = PaddingValues(0.dp),
@@ -52,7 +52,7 @@ private fun inStrip(config: ScrollbarConfig, isVertical: Boolean, crossLength: F
 class BarStripTest {
     @Test
     fun endEdgeOfVerticalListIsTheRightSideInLtr() {
-        val config = config(FastScrollEdge.END)
+        val config = config(ScrollbarEdge.End)
         assertTrue(inStrip(config, isVertical = true, crossLength = 400f, cross = 390f))
         assertTrue(inStrip(config, isVertical = true, crossLength = 400f, cross = 352f)) // exactly 48 from the edge
         assertFalse(inStrip(config, isVertical = true, crossLength = 400f, cross = 351f))
@@ -61,24 +61,24 @@ class BarStripTest {
 
     @Test
     fun startEdgeOfVerticalListIsTheLeftSideInLtr() {
-        val config = config(FastScrollEdge.START)
+        val config = config(ScrollbarEdge.Start)
         assertTrue(inStrip(config, isVertical = true, crossLength = 400f, cross = 48f))
         assertFalse(inStrip(config, isVertical = true, crossLength = 400f, cross = 49f))
     }
 
     @Test
     fun rtlFlipsTheSidesOfVerticalLists() {
-        val config = config(FastScrollEdge.END, LayoutDirection.Rtl)
+        val config = config(ScrollbarEdge.End, LayoutDirection.Rtl)
         assertTrue(inStrip(config, isVertical = true, crossLength = 400f, cross = 10f))
         assertFalse(inStrip(config, isVertical = true, crossLength = 400f, cross = 390f))
     }
 
     @Test
     fun horizontalListsUseTopAndBottomRegardlessOfRtl() {
-        val bottom = config(FastScrollEdge.END, LayoutDirection.Rtl)
+        val bottom = config(ScrollbarEdge.End, LayoutDirection.Rtl)
         assertTrue(inStrip(bottom, isVertical = false, crossLength = 300f, cross = 290f))
         assertFalse(inStrip(bottom, isVertical = false, crossLength = 300f, cross = 10f))
-        val top = config(FastScrollEdge.START, LayoutDirection.Rtl)
+        val top = config(ScrollbarEdge.Start, LayoutDirection.Rtl)
         assertTrue(inStrip(top, isVertical = false, crossLength = 300f, cross = 10f))
     }
 
@@ -100,27 +100,27 @@ class EdgeAtTest {
     @Test
     fun verticalLtrLeftIsStart() {
         val config = config(layoutDirection = LayoutDirection.Ltr)
-        assertEquals(FastScrollEdge.START, config.edgeAt(isVertical = true, atOrigin = true))
-        assertEquals(FastScrollEdge.END, config.edgeAt(isVertical = true, atOrigin = false))
+        assertEquals(ScrollbarEdge.Start, config.edgeAt(isVertical = true, atOrigin = true))
+        assertEquals(ScrollbarEdge.End, config.edgeAt(isVertical = true, atOrigin = false))
     }
 
     @Test
     fun verticalRtlLeftIsEnd() {
         val config = config(layoutDirection = LayoutDirection.Rtl)
-        assertEquals(FastScrollEdge.END, config.edgeAt(isVertical = true, atOrigin = true))
-        assertEquals(FastScrollEdge.START, config.edgeAt(isVertical = true, atOrigin = false))
+        assertEquals(ScrollbarEdge.End, config.edgeAt(isVertical = true, atOrigin = true))
+        assertEquals(ScrollbarEdge.Start, config.edgeAt(isVertical = true, atOrigin = false))
     }
 
     @Test
     fun horizontalTopIsAlwaysStart() {
         for (direction in LayoutDirection.entries) {
-            assertEquals(FastScrollEdge.START, config(layoutDirection = direction).edgeAt(false, atOrigin = true))
+            assertEquals(ScrollbarEdge.Start, config(layoutDirection = direction).edgeAt(false, atOrigin = true))
         }
     }
 
     @Test
     fun edgeAtUndoesIsCrossAxisAtOrigin() {
-        for (edge in FastScrollEdge.entries) {
+        for (edge in ScrollbarEdge.entries) {
             for (direction in LayoutDirection.entries) {
                 for (isVertical in listOf(true, false)) {
                     val config = config(edge, direction)
@@ -223,7 +223,7 @@ class GestureZonePaddingTest {
 
     @Test
     fun horizontalBarAtTheBottomIsLiftedOutOfTheZone() {
-        val bottomBar = config(edge = FastScrollEdge.END, zoneBottom = 30f)
+        val bottomBar = config(edge = ScrollbarEdge.End, zoneBottom = 30f)
         assertEquals(30f, bottomBar.crossZoneInsetPx(isVertical = false))
         // Strip is 48 wide above the 30 px zone: 300 - 30 - 48 = 222.
         assertTrue(inStrip(bottomBar, isVertical = false, crossLength = 300f, cross = 222f))
@@ -259,7 +259,7 @@ class ThumbEndPaddingTest {
     @Test
     fun capsuleKeepsTheThumbFarEnoughFromTheEndsToStayCentered() {
         val capsule = ScrollbarDefaults.style(
-            thumbAppearance = ThumbAppearance.Default, trackPadding = 8.dp, capsuleExtraLength = 24.dp,
+            thumbAppearance = ThumbAppearance.Capsule, trackPadding = 8.dp, capsuleExtraLength = 24.dp,
         )
         assertEquals(12.dp, config(style = capsule).thumbEndPadding) // half of 24 beats 8
     }
@@ -267,7 +267,7 @@ class ThumbEndPaddingTest {
     @Test
     fun trackPaddingWinsWhenItIsAlreadyEnough() {
         val capsule = ScrollbarDefaults.style(
-            thumbAppearance = ThumbAppearance.Default, trackPadding = 8.dp, capsuleExtraLength = 10.dp,
+            thumbAppearance = ThumbAppearance.Capsule, trackPadding = 8.dp, capsuleExtraLength = 10.dp,
         )
         assertEquals(8.dp, config(style = capsule).thumbEndPadding)
     }
@@ -296,8 +296,8 @@ class ThumbPlacementTest {
 
     @Test
     fun restingPositionSitsAtTheEdgePadding() = with(testDensity) {
-        assertEquals(364f, restingCrossStart(config(FastScrollEdge.END), true, 400f, 32f))
-        assertEquals(4f, restingCrossStart(config(FastScrollEdge.START), true, 400f, 32f))
+        assertEquals(364f, restingCrossStart(config(ScrollbarEdge.End), true, 400f, 32f))
+        assertEquals(4f, restingCrossStart(config(ScrollbarEdge.Start), true, 400f, 32f))
     }
 }
 
@@ -340,7 +340,7 @@ class StyleDefaultsTest {
     @Test
     fun defaultStyleFollowsThePlatform() {
         val expected = when (currentPlatform) {
-            Platform.Android -> ThumbAppearance.Default
+            Platform.Android -> ThumbAppearance.Capsule
             Platform.Ios, Platform.Desktop -> ThumbAppearance.Bar
         }
         assertEquals(expected, ScrollbarDefaults.style().thumbAppearance)

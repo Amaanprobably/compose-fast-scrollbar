@@ -43,7 +43,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import io.github.amaanprobably.scrollbar.FastScrollEdge
+import io.github.amaanprobably.scrollbar.ScrollbarEdge
 import io.github.amaanprobably.scrollbar.ScrollbarLabel
 import io.github.amaanprobably.scrollbar.ScrollbarLabelStyle
 import io.github.amaanprobably.scrollbar.ScrollbarStyle
@@ -90,8 +90,8 @@ internal fun PlaygroundScreen(onBack: () -> Unit) {
     // pads every side by the gesture zones too, which keeps the bar away from the back gesture.
     var edgeToEdge by rememberSaveable { mutableStateOf(true) }
     // Long-press the thumb and drag it across to move the bar. A real app would persist this.
-    var edge by rememberSaveable { mutableStateOf(FastScrollEdge.END) }
-    val onEdgeChange: (FastScrollEdge) -> Unit = { edge = it }
+    var edge by rememberSaveable { mutableStateOf(ScrollbarEdge.End) }
+    val onEdgeChange: (ScrollbarEdge) -> Unit = { edge = it }
 
     val style = brandScrollbarStyle(
         visibility = if (alwaysVisible) ScrollbarVisibility.Always else ScrollbarVisibility.AutoHide,
@@ -221,8 +221,8 @@ private fun ColumnDemo(
     withPadding: Boolean,
     style: ScrollbarStyle,
     label: ScrollbarLabel?,
-    edge: FastScrollEdge,
-    onEdgeChange: (FastScrollEdge) -> Unit,
+    edge: ScrollbarEdge,
+    onEdgeChange: (ScrollbarEdge) -> Unit,
     modifier: Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -252,8 +252,8 @@ private fun GridDemo(
     withPadding: Boolean,
     style: ScrollbarStyle,
     label: ScrollbarLabel?,
-    edge: FastScrollEdge,
-    onEdgeChange: (FastScrollEdge) -> Unit,
+    edge: ScrollbarEdge,
+    onEdgeChange: (ScrollbarEdge) -> Unit,
     modifier: Modifier,
 ) {
     val gridState = rememberLazyGridState()
@@ -291,8 +291,8 @@ private fun RowDemo(
     withPadding: Boolean,
     style: ScrollbarStyle,
     label: ScrollbarLabel?,
-    edge: FastScrollEdge,
-    onEdgeChange: (FastScrollEdge) -> Unit,
+    edge: ScrollbarEdge,
+    onEdgeChange: (ScrollbarEdge) -> Unit,
     modifier: Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -327,8 +327,8 @@ private fun FeedDemo(
     reverseLayout: Boolean,
     style: ScrollbarStyle,
     labelStyle: ScrollbarLabelStyle,
-    edge: FastScrollEdge,
-    onEdgeChange: (FastScrollEdge) -> Unit,
+    edge: ScrollbarEdge,
+    onEdgeChange: (ScrollbarEdge) -> Unit,
     modifier: Modifier,
 ) {
     val listState = rememberLazyListState()

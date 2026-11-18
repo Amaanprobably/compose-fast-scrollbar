@@ -97,10 +97,10 @@ import androidx.compose.ui.graphics.lerp as lerpColor
 /**
  * Which side of the cross axis the scrollbar sits on.
  *
- * - Vertical lists: START is the leading side (left in LTR, right in RTL), END the trailing side.
- * - Horizontal lists: START is the top, END is the bottom.
+ * - Vertical lists: [Start] is the leading side (left in LTR, right in RTL), [End] the trailing side.
+ * - Horizontal lists: [Start] is the top, [End] is the bottom.
  */
-enum class FastScrollEdge { START, END }
+public enum class ScrollbarEdge { Start, End }
 
 /**
  * How the thumb's length is chosen.
@@ -110,10 +110,10 @@ enum class FastScrollEdge { START, END }
  * fast scrollers.
  */
 @Immutable
-sealed interface ThumbSizing {
+public sealed interface ThumbSizing {
     /** Constant length regardless of content size. */
     @Immutable
-    class Fixed(val length: Dp = 40.dp) : ThumbSizing {
+    public class Fixed(public val length: Dp = 40.dp) : ThumbSizing {
         init {
             require(length > 0.dp) { "length must be positive" }
         }
@@ -124,10 +124,10 @@ sealed interface ThumbSizing {
      * size are animated instead of snapping, which hides jitter on variable-height items.
      */
     @Immutable
-    class Proportional(
-        val minLength: Dp = 48.dp,
-        val maxLengthFraction: Float = 0.9f,
-        val smoothed: Boolean = true,
+    public class Proportional(
+        public val minLength: Dp = 48.dp,
+        public val maxLengthFraction: Float = 0.9f,
+        public val smoothed: Boolean = true,
     ) : ThumbSizing {
         init {
             require(maxLengthFraction in 0f..1f) {
@@ -140,12 +140,12 @@ sealed interface ThumbSizing {
 /**
  * What the draggable thumb looks like.
  */
-sealed interface ThumbAppearance {
+public sealed interface ThumbAppearance {
     /**
      * The built-in touch look: a translucent capsule with a thin thumb inside it. It uses the
      * style's thickness, color, capsule and [ThumbSizing] parameters.
      */
-    data object Default : ThumbAppearance
+    public data object Capsule : ThumbAppearance
 
     /**
      * A single rounded bar with no capsule, like desktop scrollbars. The default on desktop, and
@@ -153,7 +153,7 @@ sealed interface ThumbAppearance {
      * parameters; the capsule parameters are ignored. It widens from [ScrollbarStyle.thumbThickness]
      * to [ScrollbarStyle.pressedThumbThickness] when hovered or dragged.
      */
-    data object Bar : ThumbAppearance
+    public data object Bar : ThumbAppearance
 
     /**
      * Replaces the whole capsule and thumb with your own icon, for example a brand logo.
@@ -161,11 +161,11 @@ sealed interface ThumbAppearance {
      * - [size] is required (an icon's own intrinsic size is ignored). Along the scroll axis it
      *   becomes the thumb length, so [ThumbSizing] and the style's capsule, thickness and color
      *   parameters are ignored while an icon is used.
-     * - [idle] is shown at rest and after release. [dragging] is faded in while the thumb is
+     * - [idle] is shown at rest and after release. [pressed] is faded in while the thumb is
      *   held. Leave it out to use one icon for both states.
      * - [tint] recolors the icons. Leave it [Color.Unspecified] to keep their own colors, which
      *   is what you want for multicolor logos.
-     * - [draggingScale] grows the icon slightly while it is held. Use `1f` to turn it off.
+     * - [pressedScale] grows the icon slightly while it is held. Use `1f` to turn it off.
      * - The icon is never mirrored or rotated, only positioned. For right-to-left layouts, set
      *   `autoMirror` on a vector yourself if it should flip.
      * - Touches anywhere on the icon grab it. The touch target is never smaller than
@@ -179,18 +179,18 @@ sealed interface ThumbAppearance {
      * long as the bar is visible.
      */
     @Stable
-    class Icon(
-        val idle: Painter,
-        val size: DpSize,
-        val dragging: Painter = idle,
-        val tint: Color = Color.Unspecified,
-        val draggingScale: Float = 1.1f,
+    public class Icon(
+        public val idle: Painter,
+        public val size: DpSize,
+        public val pressed: Painter = idle,
+        public val tint: Color = Color.Unspecified,
+        public val pressedScale: Float = 1.1f,
     ) : ThumbAppearance {
         init {
             require(size.width > 0.dp && size.height > 0.dp) {
                 "size must be specified and positive"
             }
-            require(draggingScale > 0f) { "draggingScale must be positive" }
+            require(pressedScale > 0f) { "pressedScale must be positive" }
         }
 
         // Built once, not per frame.
@@ -202,20 +202,20 @@ sealed interface ThumbAppearance {
 /**
  * How much of the track [TrackAppearance] draws.
  */
-enum class TrackExtent {
+public enum class TrackExtent {
     /** The whole track, from where the thumb can start to where it can end. */
     Full,
 
     /**
      * From the start of the list up to the middle of the thumb, so the track grows as you scroll,
-     * like a rope the thumb hangs from (or Wukong's growing staff). For `reverseLayout`
-     * (and right-to-left rows), the start is the bottom (or right), where the list starts.
+     * like a rope the thumb hangs from. For `reverseLayout` (and right-to-left rows), the start is
+     * the bottom (or right), where the list starts.
      */
     UpToThumb,
 }
 
 /** How [TrackAppearance.Image] fills the track along the scroll axis. */
-enum class TrackFit {
+public enum class TrackFit {
     /** One copy of the image, stretched to the track's length. Good for lines, webs and ropes. */
     Stretch,
 
@@ -232,16 +232,16 @@ enum class TrackFit {
  * it behave exactly as without it.
  */
 @Immutable
-sealed interface TrackAppearance {
+public sealed interface TrackAppearance {
     /** No visible track. The default. */
-    data object None : TrackAppearance
+    public data object None : TrackAppearance
 
     /** A plain rounded line. */
     @Immutable
-    class Line(
-        val color: Color = Color(0x33808080),
-        val thickness: Dp = 2.dp,
-        val extent: TrackExtent = TrackExtent.Full,
+    public class Line(
+        public val color: Color = Color(0x33808080),
+        public val thickness: Dp = 2.dp,
+        public val extent: TrackExtent = TrackExtent.Full,
     ) : TrackAppearance {
         init {
             require(thickness > 0.dp) { "thickness must be positive" }
@@ -266,13 +266,13 @@ sealed interface TrackAppearance {
      * already do). Animated painters work, because the track is drawn every frame while visible.
      */
     @Stable
-    class Image(
-        val painter: Painter,
-        val thickness: Dp,
-        val extent: TrackExtent = TrackExtent.Full,
-        val fit: TrackFit = TrackFit.Stretch,
-        val tileLength: Dp = Dp.Unspecified,
-        val tint: Color = Color.Unspecified,
+    public class Image(
+        public val painter: Painter,
+        public val thickness: Dp,
+        public val extent: TrackExtent = TrackExtent.Full,
+        public val fit: TrackFit = TrackFit.Stretch,
+        public val tileLength: Dp = Dp.Unspecified,
+        public val tint: Color = Color.Unspecified,
     ) : TrackAppearance {
         init {
             require(thickness > 0.dp) { "thickness must be positive" }
@@ -287,9 +287,9 @@ sealed interface TrackAppearance {
 
 /**
  * When the scrollbar is visible. Either way it only shows when the list can actually scroll and
- * has more than `minItemsToShow` items.
+ * has at least `minItemsToShow` items.
  */
-enum class ScrollbarVisibility {
+public enum class ScrollbarVisibility {
     /** Fades in while scrolling or dragging and fades out after [ScrollbarStyle.hideDelay]. */
     AutoHide,
 
@@ -301,15 +301,15 @@ enum class ScrollbarVisibility {
  * Look of the bubble that [ScrollbarLabel] shows next to the thumb while it is dragged.
  */
 @Immutable
-class ScrollbarLabelStyle(
-    val textStyle: TextStyle = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.Medium),
-    val textColor: Color = Color.White,
-    val bubbleColor: Color = Color(0xE6212121),
-    val cornerRadius: Dp = 14.dp,
-    val horizontalPadding: Dp = 14.dp,
-    val verticalPadding: Dp = 8.dp,
+public class ScrollbarLabelStyle(
+    public val textStyle: TextStyle = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.Medium),
+    public val textColor: Color = Color.White,
+    public val bubbleColor: Color = Color(0xE6212121),
+    public val cornerRadius: Dp = 14.dp,
+    public val horizontalPadding: Dp = 14.dp,
+    public val verticalPadding: Dp = 8.dp,
     /** Distance between the thumb and the bubble. */
-    val gap: Dp = 8.dp,
+    public val gap: Dp = 8.dp,
 )
 
 /**
@@ -325,10 +325,10 @@ class ScrollbarLabelStyle(
  * "Item 1234" would tick constantly. Turn [sectionHaptics] off for labels like that.
  */
 @Stable
-class ScrollbarLabel(
-    val sectionHaptics: Boolean = true,
-    val style: ScrollbarLabelStyle = ScrollbarLabelStyle(),
-    val provider: (itemIndex: Int) -> String?,
+public class ScrollbarLabel(
+    public val sectionHaptics: Boolean = true,
+    public val style: ScrollbarLabelStyle = ScrollbarLabelStyle(),
+    public val provider: (itemIndex: Int) -> String?,
 )
 
 /**
@@ -337,31 +337,31 @@ class ScrollbarLabel(
  * The "capsule" is the translucent, rounded background that wraps the thumb and moves with it.
  * Create instances with [ScrollbarDefaults.style].
  *
- * The capsule parameters only apply to [ThumbAppearance.Default]. [ThumbAppearance.Bar] uses the
+ * The capsule parameters only apply to [ThumbAppearance.Capsule]. [ThumbAppearance.Bar] uses the
  * thumb thickness, color and [ThumbSizing] parameters. [ThumbAppearance.Icon] replaces all of them.
  *
  * [trackAppearance] adds an optional visible track under the thumb, with any look. It's
  * [TrackAppearance.None] (invisible) by default.
  */
 @Stable
-class ScrollbarStyle internal constructor(
-    val thumbThickness: Dp,
-    val pressedThumbThickness: Dp,
-    val thumbSizing: ThumbSizing,
-    val thumbAppearance: ThumbAppearance,
-    val visibility: ScrollbarVisibility,
-    val touchTargetThickness: Dp,
-    val trackPadding: Dp,
-    val edgePadding: Dp,
-    val capsuleThickness: Dp,
-    val capsuleExtraLength: Dp,
-    val hideDelay: Duration,
-    val fadeInDuration: Duration,
-    val fadeOutDuration: Duration,
-    val thumbColor: Color,
-    val pressedThumbColor: Color,
-    val capsuleColor: Color,
-    val trackAppearance: TrackAppearance,
+public class ScrollbarStyle internal constructor(
+    public val thumbThickness: Dp,
+    public val pressedThumbThickness: Dp,
+    public val thumbSizing: ThumbSizing,
+    public val thumbAppearance: ThumbAppearance,
+    public val visibility: ScrollbarVisibility,
+    public val touchTargetThickness: Dp,
+    public val trackPadding: Dp,
+    public val edgePadding: Dp,
+    public val capsuleThickness: Dp,
+    public val capsuleExtraLength: Dp,
+    public val hideDelay: Duration,
+    public val fadeInDuration: Duration,
+    public val fadeOutDuration: Duration,
+    public val thumbColor: Color,
+    public val pressedThumbColor: Color,
+    public val capsuleColor: Color,
+    public val trackAppearance: TrackAppearance,
 )
 
 /** Where the library is running. Each target sets it in androidMain, iosMain or desktopMain. */
@@ -388,7 +388,7 @@ internal class StyleDefaults(
  * covers little content. The 48dp touch strip keeps it easy to grab.
  */
 internal val AndroidDefaults = StyleDefaults(
-    thumbAppearance = ThumbAppearance.Default,
+    thumbAppearance = ThumbAppearance.Capsule,
     thumbThickness = 5.dp,
     pressedThumbThickness = 8.dp,
     thumbLength = 40.dp,
@@ -411,7 +411,7 @@ internal val IosDefaults = StyleDefaults(
     touchTargetThickness = 48.dp,
     trackPadding = 6.dp,
     edgePadding = 3.dp,
-    capsuleThickness = 24.dp, // unused by Bar, same as Android for apps that switch to Default
+    capsuleThickness = 24.dp, // unused by Bar, same as Android for apps that switch to Capsule
     capsuleExtraLength = 24.dp,
 )
 
@@ -436,16 +436,16 @@ internal val PlatformDefaults: StyleDefaults
         Platform.Desktop -> CompactDefaults
     }
 
-object ScrollbarDefaults {
+public object ScrollbarDefaults {
     /**
      * The default style. It follows the platform: a finger-sized capsule
-     * ([ThumbAppearance.Default]) on Android, a thin [ThumbAppearance.Bar] that widens when
+     * ([ThumbAppearance.Capsule]) on Android, a thin [ThumbAppearance.Bar] that widens when
      * grabbed on iOS, and a mouse-sized bar on desktop. Use [compactStyle] for the desktop look
      * everywhere, or pass `thumbAppearance` to pick a look yourself.
      *
      * It is a plain function, so it can be hoisted into a top-level `val` and shared.
      */
-    fun style(
+    public fun style(
         thumbThickness: Dp = PlatformDefaults.thumbThickness,
         pressedThumbThickness: Dp = PlatformDefaults.pressedThumbThickness,
         thumbSizing: ThumbSizing = ThumbSizing.Fixed(PlatformDefaults.thumbLength),
@@ -505,7 +505,7 @@ object ScrollbarDefaults {
      * )
      * ```
      */
-    fun platformStyle(
+    public fun platformStyle(
         android: ScrollbarStyle = style(),
         ios: ScrollbarStyle = style(),
         desktop: ScrollbarStyle = style(),
@@ -520,7 +520,7 @@ object ScrollbarDefaults {
      * what [style] uses on desktop. The grab area is harder to hit with a finger, so on touch
      * screens prefer `style(thumbAppearance = ThumbAppearance.Bar)`.
      */
-    fun compactStyle(
+    public fun compactStyle(
         thumbThickness: Dp = CompactDefaults.thumbThickness,
         pressedThumbThickness: Dp = CompactDefaults.pressedThumbThickness,
         thumbSizing: ThumbSizing = ThumbSizing.Fixed(CompactDefaults.thumbLength),
@@ -595,9 +595,9 @@ internal val DefaultScrollbarStyle: ScrollbarStyle = ScrollbarDefaults.style()
  * as [edge], like any setting. Touch only. Off when `null`.
  */
 @Composable
-fun Modifier.scrollbar(
+public fun Modifier.scrollbar(
     listState: LazyListState,
-    edge: FastScrollEdge = FastScrollEdge.END,
+    edge: ScrollbarEdge = ScrollbarEdge.End,
     contentPadding: PaddingValues = PaddingValues(0.dp),
     minItemsToShow: Int = 10,
     hasMore: Boolean = false,
@@ -605,7 +605,7 @@ fun Modifier.scrollbar(
     label: ScrollbarLabel? = null,
     scrollToStartLabel: String? = null,
     scrollToEndLabel: String? = null,
-    onEdgeChange: ((FastScrollEdge) -> Unit)? = null,
+    onEdgeChange: ((ScrollbarEdge) -> Unit)? = null,
 ): Modifier {
     val target = remember(listState) { ListScrollbarTarget(listState) }
     return scrollbarFor(
@@ -623,9 +623,9 @@ fun Modifier.scrollbar(
  * the thumb position while dragging. See the list overload for the other parameters.
  */
 @Composable
-fun Modifier.scrollbar(
+public fun Modifier.scrollbar(
     gridState: LazyGridState,
-    edge: FastScrollEdge = FastScrollEdge.END,
+    edge: ScrollbarEdge = ScrollbarEdge.End,
     contentPadding: PaddingValues = PaddingValues(0.dp),
     minItemsToShow: Int = 10,
     hasMore: Boolean = false,
@@ -633,7 +633,7 @@ fun Modifier.scrollbar(
     label: ScrollbarLabel? = null,
     scrollToStartLabel: String? = null,
     scrollToEndLabel: String? = null,
-    onEdgeChange: ((FastScrollEdge) -> Unit)? = null,
+    onEdgeChange: ((ScrollbarEdge) -> Unit)? = null,
 ): Modifier {
     val target = remember(gridState) { GridScrollbarTarget(gridState) }
     return scrollbarFor(
@@ -1459,11 +1459,11 @@ internal class ScrollbarConfig(
     val style: ScrollbarStyle,
     val contentPadding: PaddingValues,
     val minItemsToShow: Int,
-    val edge: FastScrollEdge,
+    val edge: ScrollbarEdge,
     val layoutDirection: LayoutDirection,
     val label: ScrollbarLabel?,
     val hasMore: Boolean,
-    val onEdgeChange: ((FastScrollEdge) -> Unit)?,
+    val onEdgeChange: ((ScrollbarEdge) -> Unit)?,
     val gestureZones: GestureZoneOverlap = GestureZoneOverlap(),
 ) {
     /** Largest thumb progress. Below 1 while more items can still load. */
@@ -1471,13 +1471,13 @@ internal class ScrollbarConfig(
 
     /** True when the bar sits at the left (vertical) or top (horizontal) of the list. */
     fun isCrossAxisAtOrigin(isVertical: Boolean): Boolean =
-        if (isVertical) (edge == FastScrollEdge.START) == (layoutDirection == LayoutDirection.Ltr)
-        else edge == FastScrollEdge.START
+        if (isVertical) (edge == ScrollbarEdge.Start) == (layoutDirection == LayoutDirection.Ltr)
+        else edge == ScrollbarEdge.Start
 
     /** The edge whose side is the left (vertical) or top (horizontal) when [atOrigin]. */
-    fun edgeAt(isVertical: Boolean, atOrigin: Boolean): FastScrollEdge {
+    fun edgeAt(isVertical: Boolean, atOrigin: Boolean): ScrollbarEdge {
         val start = if (isVertical) atOrigin == (layoutDirection == LayoutDirection.Ltr) else atOrigin
-        return if (start) FastScrollEdge.START else FastScrollEdge.END
+        return if (start) ScrollbarEdge.Start else ScrollbarEdge.End
     }
 
     /** True when scroll progress runs against the physical axis (reverseLayout, or RTL rows). */
@@ -1491,7 +1491,7 @@ internal class ScrollbarConfig(
      */
     val thumbEndPadding: Dp
         get() = when (style.thumbAppearance) {
-            ThumbAppearance.Default -> maxOf(style.trackPadding, style.capsuleExtraLength / 2)
+            ThumbAppearance.Capsule -> maxOf(style.trackPadding, style.capsuleExtraLength / 2)
             ThumbAppearance.Bar, is ThumbAppearance.Icon -> style.trackPadding
         }
 
@@ -1603,7 +1603,7 @@ internal fun Density.crossLengthOfThumb(style: ScrollbarStyle, isVertical: Boole
         is ThumbAppearance.Icon ->
             (if (isVertical) appearance.size.width else appearance.size.height).toPx()
         ThumbAppearance.Bar -> style.pressedThumbThickness.toPx() // room to widen in place
-        ThumbAppearance.Default -> style.capsuleThickness.toPx()
+        ThumbAppearance.Capsule -> style.capsuleThickness.toPx()
     }
 
 /** Where the thumb rests across the scroll axis, at its edge. */
@@ -1659,7 +1659,7 @@ private fun Density.layoutThumbForInput(
     isVertical: Boolean,
     containerLength: Float,
 ): Boolean {
-    if (!metrics.update(target) || metrics.itemCount <= config.minItemsToShow) return false
+    if (!metrics.update(target) || metrics.itemCount < config.minItemsToShow) return false
     // Nothing to scroll means nothing is drawn, so nothing may be grabbed either. This matters
     // in Always mode, where the bar's alpha stays at 1.
     if (metrics.contentLength <= metrics.viewportLength) return false
@@ -1697,7 +1697,7 @@ internal fun centeredProgress(
 @Composable
 private fun Modifier.scrollbarFor(
     target: ScrollbarTarget,
-    edge: FastScrollEdge,
+    edge: ScrollbarEdge,
     contentPadding: PaddingValues,
     minItemsToShow: Int,
     hasMore: Boolean,
@@ -1706,7 +1706,7 @@ private fun Modifier.scrollbarFor(
     // Accessibility labels
     scrollToStartLabel: String?,
     scrollToEndLabel: String?,
-    onEdgeChange: ((FastScrollEdge) -> Unit)?,
+    onEdgeChange: ((ScrollbarEdge) -> Unit)?,
 ): Modifier {
     val haptics = LocalHapticFeedback.current
     val layoutDirection = LocalLayoutDirection.current
@@ -2144,7 +2144,7 @@ private fun Modifier.scrollbarFor(
                 val content = indicator.contentSize.toFloat()
                 val viewport = indicator.viewportSize.toFloat()
                 val itemCount = target.totalItemsCount
-                if (viewport <= 0f || content <= viewport || itemCount <= config.minItemsToShow) {
+                if (viewport <= 0f || content <= viewport || itemCount < config.minItemsToShow) {
                     controller.lastDrawnCount = NO_BASELINE // nothing drawn, nothing to compare
                     controller.releaseThumb(edgeGuard)
                     return@drawWithContent
@@ -2275,7 +2275,7 @@ private fun Modifier.scrollbarFor(
                     )
                 }
 
-                ThumbAppearance.Default -> {
+                ThumbAppearance.Capsule -> {
                     drawScrollbar(
                         isVertical = isVertical,
                         geometry = geometry,
@@ -2460,19 +2460,19 @@ private fun DrawScope.drawThumbIcon(
     val mainStart = geometry.start + (geometry.length - mainLength) / 2f
     val topLeft = pointOf(isVertical, mainStart, crossStart)
     val iconSize = Size(iconWidth, iconHeight)
-    val scale = lerp(1f, icon.draggingScale, highlight) // grows a little on hover too
+    val scale = lerp(1f, icon.pressedScale, highlight) // grows a little on hover too
 
     withTransform({
         translate(left = topLeft.x, top = topLeft.y)
         scale(scaleX = scale, scaleY = scale, pivot = Offset(iconWidth / 2f, iconHeight / 2f))
     }) {
-        if (icon.dragging === icon.idle) {
+        if (icon.pressed === icon.idle) {
             drawPainter(icon.idle, iconSize, alpha, icon.colorFilter)
         } else {
             val idleAlpha = alpha * (1f - pressed)
             val draggingAlpha = alpha * pressed
             if (idleAlpha > 0f) drawPainter(icon.idle, iconSize, idleAlpha, icon.colorFilter)
-            if (draggingAlpha > 0f) drawPainter(icon.dragging, iconSize, draggingAlpha, icon.colorFilter)
+            if (draggingAlpha > 0f) drawPainter(icon.pressed, iconSize, draggingAlpha, icon.colorFilter)
         }
     }
 }
