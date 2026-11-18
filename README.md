@@ -1,7 +1,7 @@
 <h1 align="center">
   <img
     width="128"
-    alt="thief_only"
+    alt="Compose Fast Scrollbar logo"
     src="https://github.com/user-attachments/assets/09c15543-8bc6-4f58-8183-26d2d7e2022d"
     align="middle"
   />
@@ -16,7 +16,7 @@
 
 A draggable fast scrollbar for Jetpack Compose and Compose Multiplatform: LazyColumn, LazyRow and grids. One modifier, no wrapper composable, works on Android, iOS and Desktop.
 
-> **Status:** early development, not published yet. The full test suite passes on Android, Desktop and the iOS simulator; it hasn't been tried on a real iPhone yet.
+> **Status:** early development, not published yet. The full test suite passes on Android devices, Desktop and the iOS simulator.
 
 ## Features
 
@@ -28,7 +28,7 @@ A draggable fast scrollbar for Jetpack Compose and Compose Multiplatform: LazyCo
 - Auto-hides after scrolling stops, with a smooth settle animation after you release the thumb. Or keep it always visible.
 - Optional label bubble next to the thumb while dragging (a letter, date or section name), with a haptic tick when you cross into a new section.
 - Fully styleable: thickness, colors, timings and edge placement.
-- Use your own brand icon or logo as the thumb, with separate idle and dragging icons.
+- Use your own brand icon or logo as the thumb, with separate idle and pressed icons.
 - Optional visible track with any look: a plain line, or your own drawing stretched or repeated along it. Show it full length, or only up to the thumb so the thumb hangs from it like a rope.
 - Plays well with Android gesture navigation: the visible thumb is excluded from the back gesture, and the track stays out of the top and bottom system gesture zones, so grabbing it never sends you back or home.
 - Mouse support (desktop, and mice on Android and iPad): hovering reveals the bar and highlights the thumb, hovering the track previews the label for that spot, and clicking the track jumps there. Wheel and trackpad scrolling always reach the list, and touch behavior is unchanged.
@@ -66,7 +66,26 @@ LazyColumn(
 }
 ```
 
-Or if you want to specify your own brand icon/logo as the thumb itself:
+### All parameters
+
+Two overloads: one takes a `LazyListState` (for `LazyColumn` and `LazyRow`), the other a `LazyGridState` (for `LazyVerticalGrid` and `LazyHorizontalGrid`). Both take the same parameters.
+
+| Parameter                 | Type                              | Default                     | Description                                                                                                                                                  |
+|---------------------------|-----------------------------------|-----------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `listState` / `gridState` | `LazyListState` / `LazyGridState` | required                    | The same state you pass to the list.                                                                                                                         |
+| `edge`                    | `ScrollbarEdge`                   | `ScrollbarEdge.End`         | Which side the bar sits on. Vertical lists: `Start` is the leading side (left in LTR, right in RTL). Horizontal lists: `Start` is the top, `End` the bottom. |
+| `contentPadding`          | `PaddingValues`                   | `PaddingValues(0.dp)`       | The list's padding. The track stays inside it along the scroll axis.                                                                                         |
+| `minItemsToShow`          | `Int`                             | `10`                        | The bar stays hidden for lists with fewer items than this.                                                                                                   |
+| `hasMore`                 | `Boolean`                         | `false`                     | `true` while more items can load. The thumb stops short of the end until it's `false`.                                                                       |
+| `style`                   | `ScrollbarStyle`                  | `ScrollbarDefaults.style()` | The look, sizes, colors and timings. See the [API reference](#api-reference).                                                                                |
+| `label`                   | `ScrollbarLabel?`                 | `null`                      | A bubble next to the thumb while dragging.                                                                                                                   |
+| `scrollToStartLabel`      | `String?`                         | `null`                      | Accessibility label for a "scroll to start" action. No action is added when `null`.                                                                          |
+| `scrollToEndLabel`        | `String?`                         | `null`                      | Accessibility label for a "scroll to end" action. No action is added when `null`.                                                                            |
+| `onEdgeChange`            | `((ScrollbarEdge) -> Unit)?`      | `null`                      | Turns on the movable bar. Called with the new edge after the user moves it; store it and pass it back as `edge`.                                             |
+
+### Custom thumb icon
+
+Use your own brand icon or logo as the thumb itself:
 
 ```kotlin
 Modifier.scrollbar(
@@ -74,7 +93,7 @@ Modifier.scrollbar(
     style = ScrollbarDefaults.style(
         thumbAppearance = ThumbAppearance.Icon(
             idle = painterResource(Res.drawable.logo),
-            dragging = painterResource(Res.drawable.logo_active),
+            pressed = painterResource(Res.drawable.logo_active),
             size = DpSize(48.dp, 48.dp),
         ),
     ),
@@ -84,7 +103,7 @@ Modifier.scrollbar(
 Notes on icon thumbs:
 
 - `size` is required. It becomes the thumb length along the scroll axis, and the capsule, thickness, color and `ThumbSizing` options are ignored.
-- `dragging` is optional. Leave it out to use one icon for both states.
+- `pressed` is optional. Leave it out to use one icon for both states.
 - `tint` is off by default, so multicolor logos keep their colors.
 - The icon is never mirrored or rotated. For right-to-left layouts, set `autoMirror` on a vector if you want it to flip.
 - Use `remember`ed painters (`painterResource` already does this). Animated painters might work but aren't tested yet.
@@ -118,7 +137,7 @@ While `hasMore` is `true`, the thumb stops short of the very end, and dragging t
 Let users move the bar to the other side, which helps left-handed and one-handed use. Hold the thumb still for half a second, drag it across, and it snaps to the nearest edge:
 
 ```kotlin
-var edge by rememberSaveable { mutableStateOf(FastScrollEdge.END) }
+var edge by rememberSaveable { mutableStateOf(ScrollbarEdge.End) }
 
 Modifier.scrollbar(listState, edge = edge, onEdgeChange = { edge = it })
 ```
@@ -169,7 +188,7 @@ You don't need to add the system gesture insets yourself. If the list reaches th
 ```kotlin
 Modifier.scrollbar(
     listState,
-    edge = FastScrollEdge.START,
+    edge = ScrollbarEdge.Start,
     style = ScrollbarDefaults.style(
         thumbColor = Color.Gray,
         pressedThumbColor = Color(0xFF6200EE),
@@ -179,11 +198,11 @@ Modifier.scrollbar(
 )
 ```
 
-The look follows the platform: a capsule with a thumb inside on Android, a thin bar that widens when grabbed on iOS (like the system scroll indicator), and a mouse-sized bar on desktop. Pick a look yourself with `thumbAppearance`:
+The look follows the platform: a capsule with a thumb inside on Android, a thin bar that widens when grabbed on iOS (like the system scroll indicator), and a mouse-sized bar on desktop. Pick a look yourself with `thumbAppearance`. Every option is listed in the [API reference](#api-reference).
 
 | Appearance                  | Look                                                                                |
 |-----------------------------|-------------------------------------------------------------------------------------|
-| `ThumbAppearance.Default`   | Translucent capsule with a thin thumb inside. The Android default.                  |
+| `ThumbAppearance.Capsule`   | Translucent capsule with a thin thumb inside. The Android default.                  |
 | `ThumbAppearance.Bar`       | One rounded bar, no capsule. The iOS and desktop default. Widens on hover and drag. |
 | `ThumbAppearance.Icon(...)` | Your own icon or logo.                                                              |
 
@@ -238,7 +257,7 @@ ScrollbarDefaults.style(
 | `extent`      | `Full`: the whole track. `UpToThumb`: from the start of the list to the middle of the thumb, so it grows as you scroll. On `reverseLayout` lists it grows from the bottom. |
 | `fit` (Image) | `Stretch`: one copy, stretched. Good for lines, webs and ropes. `Repeat`: copies end to end, keeping their proportions. Good for ladders, chains and towers.               |
 
-Any `Painter` works, so no custom drawing code is needed. 
+Any `Painter` works, so no custom drawing code is needed.
 
 Have an SVG? Import it as a vector drawable (Android Studio → New → Vector Asset), put it in `composeResources/drawable/`, and load it with `painterResource`. PNGs and `ImageVector`s (through `rememberVectorPainter`) work too.
 
@@ -251,19 +270,133 @@ The track is drawn under the thumb and centered on it, so it follows when the ba
 | `ThumbSizing.Fixed(length)`     | Constant length. This is the default, and it never jitters.                                          |
 | `ThumbSizing.Proportional(...)` | Length follows viewport / content. `smoothed = true` animates changes in the estimated content size. |
 
-### Parameters
+## API reference
 
-| Parameter            | Default                     | Description                                                                                                     |
-|----------------------|-----------------------------|-----------------------------------------------------------------------------------------------------------------|
-| `edge`               | `END`                       | Which side of the cross axis the bar sits on. For horizontal lists, `START` is the top and `END` is the bottom. |
-| `contentPadding`     | `0.dp`                      | Padding along the scroll axis that the track stays inside.                                                      |
-| `minItemsToShow`     | `10`                        | The bar stays hidden for lists with this many items or fewer.                                                   |
-| `style`              | `ScrollbarDefaults.style()` | Sizes, colors, timings, and the thumb and track appearance.                                                     |                                                           
-| `hasMore`            | `false`                     | `true` for feeds that load more as you scroll. See above.                                                       |
-| `label`              | `null`                      | Bubble shown next to the thumb while dragging. See above.                                                       |
-| `onEdgeChange`       | `null`                      | Long-press and drag the thumb across to move the bar to the other edge. See above.                              |
-| `scrollToStartLabel` | `null`                      | Accessibility label for a "scroll to start" action. No action is added when `null`.                             |
-| `scrollToEndLabel`   | `null`                      | Accessibility label for a "scroll to end" action. No action is added when `null`.                               |
+The style and appearance types, with every parameter and default. The modifier's own parameters are listed under [All parameters](#all-parameters).
+
+### `ScrollbarDefaults`
+
+| Function                               | Returns                                                                                                  |
+|----------------------------------------|----------------------------------------------------------------------------------------------------------|
+| `style(...)`                           | A style with the platform's look: capsule on Android, thin bar on iOS, compact bar on desktop.           |
+| `compactStyle(...)`                    | The desktop look on every platform: thin bar, mouse-sized grab area. Same parameters as `style`.         |
+| `platformStyle(android, ios, desktop)` | One of the three styles, picked for the platform it runs on. Each defaults to that platform's `style()`. |
+
+`style` and `compactStyle` are plain functions, so you can create a style once in a top-level `val` and share it.
+
+### Style parameters
+
+All parameters of `style(...)` and `compactStyle(...)`. Sizes marked "platform" use the values in the next table.
+
+| Parameter               | Type                  | Default                    | Description                                                                                       |
+|-------------------------|-----------------------|----------------------------|---------------------------------------------------------------------------------------------------|
+| `thumbAppearance`       | `ThumbAppearance`     | platform                   | `Capsule`, `Bar` or `Icon(...)`.                                                                  |
+| `thumbSizing`           | `ThumbSizing`         | `Fixed(40.dp)`             | `Fixed(length)` or `Proportional(...)`.                                                           |
+| `thumbThickness`        | `Dp`                  | platform                   | Thumb width (height for horizontal bars) at rest.                                                 |
+| `pressedThumbThickness` | `Dp`                  | platform                   | Thumb width while held. The bar look widens to it, and halfway to it on mouse hover.              |
+| `touchTargetThickness`  | `Dp`                  | platform                   | Width of the grab strip along the edge. Touches in it that miss the thumb still reach the list.   |
+| `trackPadding`          | `Dp`                  | platform                   | Space kept free at both ends of the track, along the scroll axis.                                 |
+| `edgePadding`           | `Dp`                  | platform                   | Space between the bar and the list's edge.                                                        |
+| `capsuleThickness`      | `Dp`                  | platform                   | Width of the capsule around the thumb (`Capsule` look only).                                      |
+| `capsuleExtraLength`    | `Dp`                  | platform                   | How much longer the capsule is than the thumb, split between both ends (`Capsule` look only).     |
+| `visibility`            | `ScrollbarVisibility` | `AutoHide`                 | `AutoHide` (fades out after scrolling stops) or `Always`.                                         |
+| `hideDelay`             | `Duration`            | `1.5.seconds`              | How long the bar stays after scrolling stops (`AutoHide` only).                                   |
+| `fadeInDuration`        | `Duration`            | `150.milliseconds`         | Fade-in time.                                                                                     |
+| `fadeOutDuration`       | `Duration`            | `300.milliseconds`         | Fade-out time.                                                                                    |
+| `thumbColor`            | `Color`               | `Color(0x80808080)`        | Thumb color at rest.                                                                              |
+| `pressedThumbColor`     | `Color`               | `Color(0xFF2196F3)`        | Thumb color while held.                                                                           |
+| `capsuleColor`          | `Color`               | `Color(0x2E808080)`        | Capsule color (`Capsule` look only).                                                              |
+| `trackAppearance`       | `TrackAppearance`     | `TrackAppearance.None`     | An optional visible track. See below.                                                             |
+
+### Platform defaults
+
+| Value                   | Android (`style`) | iOS (`style`) | Desktop (`style`) and `compactStyle` |
+|-------------------------|-------------------|---------------|--------------------------------------|
+| `thumbAppearance`       | `Capsule`         | `Bar`         | `Bar`                                |
+| `thumbThickness`        | 5 dp              | 3 dp          | 8 dp                                 |
+| `pressedThumbThickness` | 8 dp              | 8 dp          | 12 dp                                |
+| Thumb length            | 40 dp             | 40 dp         | 40 dp                                |
+| `touchTargetThickness`  | 48 dp             | 48 dp         | 16 dp                                |
+| `trackPadding`          | 8 dp              | 6 dp          | 4 dp                                 |
+| `edgePadding`           | 4 dp              | 3 dp          | 2 dp                                 |
+| `capsuleThickness`      | 24 dp             | 24 dp         | 16 dp                                |
+| `capsuleExtraLength`    | 24 dp             | 24 dp         | 8 dp                                 |
+
+### `ThumbAppearance`
+
+| Option                      | Description                                                                 |
+|-----------------------------|-----------------------------------------------------------------------------|
+| `ThumbAppearance.Capsule`   | A translucent capsule with a thin thumb inside. The Android default.        |
+| `ThumbAppearance.Bar`       | One rounded bar, no capsule. The iOS and desktop default. Widens when held. |
+| `ThumbAppearance.Icon(...)` | Your own icon. Replaces the capsule, thickness, color and sizing options.   |
+
+`ThumbAppearance.Icon` parameters:
+
+| Parameter      | Type      | Default             | Description                                                                 |
+|----------------|-----------|---------------------|-----------------------------------------------------------------------------|
+| `idle`         | `Painter` | required            | Shown at rest and after release.                                            |
+| `size`         | `DpSize`  | required            | The icon's size. Along the scroll axis, it's the thumb's length.            |
+| `pressed`      | `Painter` | `idle`              | Faded in while the thumb is held.                                           |
+| `tint`         | `Color`   | `Color.Unspecified` | Recolors the icon. Unspecified keeps its own colors.                        |
+| `pressedScale` | `Float`   | `1.1f`              | Grows the icon while held. `1f` turns it off.                               |
+
+### `ThumbSizing`
+
+| Option                                                                       | Description                                                                                                                                             |
+|------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `Fixed(length = 40.dp)`                                                      | Constant length. The default, and it never jitters.                                                                                                     |
+| `Proportional(minLength = 48.dp, maxLengthFraction = 0.9f, smoothed = true)` | Length follows viewport / content, between `minLength` and `maxLengthFraction` of the track. `smoothed` animates changes in the estimated content size. |
+
+### `TrackAppearance`
+
+| Option                       | Description                         |
+|------------------------------|-------------------------------------|
+| `TrackAppearance.None`       | No visible track. The default.      |
+| `TrackAppearance.Line(...)`  | A plain rounded line.               |
+| `TrackAppearance.Image(...)` | Any painter, stretched or repeated. |
+
+`Line` parameters:
+
+| Parameter   | Type          | Default             | Description                                   |
+|-------------|---------------|---------------------|-----------------------------------------------|
+| `color`     | `Color`       | `Color(0x33808080)` | Line color.                                   |
+| `thickness` | `Dp`          | `2.dp`              | Line width across the scroll axis.            |
+| `extent`    | `TrackExtent` | `Full`              | `Full` or `UpToThumb`.                        |
+
+`Image` parameters:
+
+| Parameter    | Type          | Default             | Description                                                                                         |
+|--------------|---------------|---------------------|-----------------------------------------------------------------------------------------------------|
+| `painter`    | `Painter`     | required            | The drawing. Draw it upright for vertical lists, sideways for horizontal ones.                      |
+| `thickness`  | `Dp`          | required            | Its size across the scroll axis.                                                                    |
+| `extent`     | `TrackExtent` | `Full`              | `Full`: the whole track. `UpToThumb`: from the list's start to the middle of the thumb.             |
+| `fit`        | `TrackFit`    | `Stretch`           | `Stretch`: one copy, stretched. `Repeat`: copies end to end, keeping their proportions.             |
+| `tileLength` | `Dp`          | `Dp.Unspecified`    | With `Repeat`, the length of one copy. Unspecified keeps the painter's own proportions.             |
+| `tint`       | `Color`       | `Color.Unspecified` | Recolors it. Unspecified keeps its own colors.                                                      |
+
+### `ScrollbarLabel`
+
+```kotlin
+ScrollbarLabel(sectionHaptics = true, style = ScrollbarLabelStyle()) { itemIndex -> "A" }
+```
+
+| Parameter        | Type                          | Default                    | Description                                                                            |
+|------------------|-------------------------------|----------------------------|----------------------------------------------------------------------------------------|
+| `sectionHaptics` | `Boolean`                     | `true`                     | Ticks whenever the text changes. Turn it off for per-item labels.                      |
+| `style`          | `ScrollbarLabelStyle`         | `ScrollbarLabelStyle()`    | The bubble's look.                                                                     |
+| `provider`       | `(itemIndex: Int) -> String?` | required (trailing lambda) | Text for the item the drag is jumping to, or `null` to hide the bubble. Keep it cheap. |
+
+`ScrollbarLabelStyle` parameters:
+
+| Parameter           | Type        | Default                                            | Description                                |
+|---------------------|-------------|----------------------------------------------------|--------------------------------------------|
+| `textStyle`         | `TextStyle` | `TextStyle(fontSize = 18.sp, fontWeight = Medium)` | The label text.                            |
+| `textColor`         | `Color`     | `Color.White`                                      | Text color.                                |
+| `bubbleColor`       | `Color`     | `Color(0xE6212121)`                                | Bubble background.                         |
+| `cornerRadius`      | `Dp`        | `14.dp`                                            | Bubble corner radius.                      |
+| `horizontalPadding` | `Dp`        | `14.dp`                                            | Space left and right of the text.          |
+| `verticalPadding`   | `Dp`        | `8.dp`                                             | Space above and below the text.            |
+| `gap`               | `Dp`        | `8.dp`                                             | Distance between the thumb and the bubble. |
 
 ## Known limitations
 
@@ -307,6 +440,8 @@ The track is drawn under the thumb and centered on it, so it follows when the ba
 
 Copyright 2026 Amaan Qureshi
 
-Licensed under the [Apache License, Version 2.0](LICENSE). You can use this library in any app, commercial or open source. 
+Licensed under the [Apache License, Version 2.0](LICENSE). You can use this library in any app, commercial or open source.
 
 If you redistribute it or a modified version, keep the copyright notice and the [NOTICE](NOTICE) file.
+
+The demo app's artwork (launcher icon and characters) is licensed separately under [CC BY-NC-ND 4.0](ASSETS-LICENSE.md).
