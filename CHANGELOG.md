@@ -3,7 +3,7 @@
 All notable changes to this project are documented here. The project follows
 [semantic versioning](https://semver.org). While it's on 0.x, minor versions may include breaking changes.
 
-## 0.1.0 (unreleased)
+## 0.1.0 (2026-11-19)
 
 First release.
 

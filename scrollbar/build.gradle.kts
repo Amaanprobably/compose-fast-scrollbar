@@ -4,7 +4,11 @@ plugins {
     alias(libs.plugins.androidLint)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
+    alias(libs.plugins.mavenPublish)
 }
+
+group = "io.github.amaanprobably"
+version = "0.1.0"
 
 kotlin {
     explicitApi()
@@ -77,6 +81,42 @@ kotlin {
                 implementation(libs.androidx.testRunner)
                 implementation(libs.androidx.compose.uiTestManifest) // lets the test launch an activity
             }
+        }
+    }
+}
+
+mavenPublishing {
+    publishToMavenCentral()
+    // Signs on CI, where the key comes from repository secrets. Local publishToMavenLocal runs unsigned.
+    if (project.hasProperty("signingInMemoryKey")) {
+        signAllPublications()
+    }
+
+    coordinates(group.toString(), "compose-fast-scrollbar", version.toString())
+
+    pom {
+        name = "Compose Fast Scrollbar"
+        description = "A draggable fast scrollbar for Jetpack Compose and Compose Multiplatform lazy layouts."
+        inceptionYear = "2026"
+        url = "https://github.com/Amaanprobably/compose-fast-scrollbar"
+        licenses {
+            license {
+                name = "The Apache License, Version 2.0"
+                url = "https://www.apache.org/licenses/LICENSE-2.0.txt"
+                distribution = "https://www.apache.org/licenses/LICENSE-2.0.txt"
+            }
+        }
+        developers {
+            developer {
+                id = "Amaanprobably"
+                name = "Amaan Qureshi"
+                url = "https://github.com/Amaanprobably"
+            }
+        }
+        scm {
+            url = "https://github.com/Amaanprobably/compose-fast-scrollbar"
+            connection = "scm:git:git://github.com/Amaanprobably/compose-fast-scrollbar.git"
+            developerConnection = "scm:git:ssh://git@github.com/Amaanprobably/compose-fast-scrollbar.git"
         }
     }
 }

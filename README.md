@@ -16,7 +16,7 @@
 
 A draggable fast scrollbar for Jetpack Compose and Compose Multiplatform: LazyColumn, LazyRow and grids. One modifier, no wrapper composable, works on Android, iOS and Desktop.
 
-> **Status:** early development, not published yet. The full test suite passes on Android devices, Desktop and the iOS simulator.
+> **Status:** early (0.x). The full test suite passes on Android devices, Desktop and the iOS simulator.
 
 ## Features
 
@@ -36,12 +36,10 @@ A draggable fast scrollbar for Jetpack Compose and Compose Multiplatform: LazyCo
 
 ## Installation
 
-Not published yet. Once it is:
-
 ```kotlin
 // commonMain
 dependencies {
-    implementation("io.github.Amaanprobably:compose-fast-scrollbar:0.1.0")
+    implementation("io.github.amaanprobably:compose-fast-scrollbar:0.1.0")
 }
 ```
 
