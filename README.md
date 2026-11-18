@@ -1,7 +1,7 @@
-# Compose Fast Scroller
-[![CI](https://github.com/Amaanprobably/compose-fast-scroller/actions/workflows/ci.yml/badge.svg)](https://github.com/Amaanprobably/compose-fast-scroller/actions/workflows/ci.yml)
+# Compose Fast Scrollbar
+[![CI](https://github.com/Amaanprobably/compose-fast-scrollbar/actions/workflows/ci.yml/badge.svg)](https://github.com/Amaanprobably/compose-fast-scrollbar/actions/workflows/ci.yml)
 
-A draggable fast scrollbar for Compose Multiplatform lazy layouts. One modifier, no wrapper composable, works on Android, iOS and Desktop.
+A draggable fast scrollbar for Jetpack Compose and Compose Multiplatform: LazyColumn, LazyRow and grids. One modifier, no wrapper composable, works on Android, iOS and Desktop.
 
 > **Status:** early development, not published yet. The full test suite passes on Android, Desktop and the iOS simulator; it hasn't been tried on a real iPhone yet.
 
@@ -28,7 +28,7 @@ Not published yet. Once it is:
 ```kotlin
 // commonMain
 dependencies {
-    implementation("io.github.Amaanprobably:compose-fast-scroller:0.1.0")
+    implementation("io.github.Amaanprobably:compose-fast-scrollbar:0.1.0")
 }
 ```
 
@@ -245,7 +245,7 @@ The track is drawn under the thumb and centered on it, so it follows when the ba
 | `edge`               | `END`                       | Which side of the cross axis the bar sits on. For horizontal lists, `START` is the top and `END` is the bottom. |
 | `contentPadding`     | `0.dp`                      | Padding along the scroll axis that the track stays inside.                                                      |
 | `minItemsToShow`     | `10`                        | The bar stays hidden for lists with this many items or fewer.                                                   |
-| `style`              | `ScrollbarDefaults.style()` | Sizes, colors, timings, and the thumb and track appearance.                                                     |                                                           |
+| `style`              | `ScrollbarDefaults.style()` | Sizes, colors, timings, and the thumb and track appearance.                                                     |                                                           
 | `hasMore`            | `false`                     | `true` for feeds that load more as you scroll. See above.                                                       |
 | `label`              | `null`                      | Bubble shown next to the thumb while dragging. See above.                                                       |
 | `onEdgeChange`       | `null`                      | Long-press and drag the thumb across to move the bar to the other edge. See above.                              |
