@@ -33,8 +33,12 @@ import io.github.amaanprobably.scrollbar.TrackAppearance
 import io.github.amaanprobably.scrollbar.TrackExtent
 import io.github.amaanprobably.scrollbar.TrackFit
 import io.github.amaanprobably.scrollbar.scrollbar
+import org.jetbrains.compose.resources.painterResource
+import scrollbar.shared.generated.resources.Res
+import scrollbar.shared.generated.resources.firefighter_only
+import scrollbar.shared.generated.resources.thief_only
 
-// 07 Hang on: a visible track. Placeholder drawings: swap in your own character, rope and pole.
+// 07 Hang on: a visible track. A thief on a rope (up to the thumb) and a firefighter on a ladder (full).
 
 private enum class TrackLook(val title: String) {
     Rope("Rope · up to thumb"),
@@ -66,23 +70,6 @@ private val LadderTile: ImageVector = ImageVector.Builder(
     }
 }.build()
 
-/** Placeholder character: a coral ball with a white ring. Replace with your own drawing. */
-private val Climber: ImageVector = ImageVector.Builder(
-    name = "Climber", defaultWidth = 40.dp, defaultHeight = 40.dp, viewportWidth = 40f, viewportHeight = 40f,
-).apply {
-    path(fill = SolidColor(Brand.Coral)) {
-        moveTo(20f, 2f)
-        arcTo(18f, 18f, 0f, isMoreThanHalf = true, isPositiveArc = true, x1 = 20f, y1 = 38f)
-        arcTo(18f, 18f, 0f, isMoreThanHalf = true, isPositiveArc = true, x1 = 20f, y1 = 2f)
-        close()
-    }
-    path(stroke = SolidColor(Color.White), strokeLineWidth = 3f) {
-        moveTo(20f, 9f)
-        arcTo(11f, 11f, 0f, isMoreThanHalf = true, isPositiveArc = true, x1 = 20f, y1 = 31f)
-        arcTo(11f, 11f, 0f, isMoreThanHalf = true, isPositiveArc = true, x1 = 20f, y1 = 9f)
-    }
-}.build()
-
 @Composable
 internal fun TrackScreen(onBack: () -> Unit) {
     val notes = remember { buildNotes() }
@@ -90,13 +77,17 @@ internal fun TrackScreen(onBack: () -> Unit) {
     var look by rememberSaveable { mutableStateOf(TrackLook.Rope) }
     var reverse by rememberSaveable { mutableStateOf(false) }
 
-    val climber = rememberVectorPainter(Climber)
+    val thief = painterResource(Res.drawable.thief_only)
+    val firefighter = painterResource(Res.drawable.firefighter_only)
     val rope = rememberVectorPainter(RopeTile)
     val ladder = rememberVectorPainter(LadderTile)
-    val style = remember(look, climber, rope, ladder) {
+    val style = remember(look, thief, firefighter, rope, ladder) {
         ScrollbarDefaults.style(
             visibility = ScrollbarVisibility.Always,
-            thumbAppearance = ThumbAppearance.Icon(idle = climber, size = DpSize(40.dp, 40.dp)),
+            thumbAppearance = when (look) {
+                TrackLook.Rope -> ThumbAppearance.Icon(idle = thief, size = DpSize(40.dp, 48.dp))
+                TrackLook.Ladder -> ThumbAppearance.Icon(idle = firefighter, size = DpSize(40.dp, 48.dp))
+            },
             trackAppearance = when (look) {
                 TrackLook.Rope -> TrackAppearance.Image(
                     painter = rope, thickness = 10.dp, extent = TrackExtent.UpToThumb, fit = TrackFit.Repeat,
