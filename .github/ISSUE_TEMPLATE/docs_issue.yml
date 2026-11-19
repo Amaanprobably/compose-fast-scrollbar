@@ -1,0 +1,20 @@
+name: Docs issue
+description: Something in the README or guide is wrong, unclear or missing.
+title: "[Docs]: "
+labels: ["documentation"]
+body:
+  - type: input
+    id: where
+    attributes:
+      label: Where?
+      description: A link to the section, or the file and heading.
+      placeholder: GUIDE.md › Infinite feeds, chats and paging
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What's wrong or missing?
+      description: What you expected to find, or what didn't work when you followed it.
+    validations:
+      required: true

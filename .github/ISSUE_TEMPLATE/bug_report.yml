@@ -1,0 +1,76 @@
+name: Bug report
+description: Something is broken or behaves oddly.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Please search the [existing issues](https://github.com/Amaanprobably/compose-fast-scrollbar/issues) first. If it's already there, add a 👍 or your details to it instead.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+      placeholder: Dragging the thumb to the bottom of a reversed chat stops about 80% of the way down…
+    validations:
+      required: true
+  - type: textarea
+    id: recording
+    attributes:
+      label: Screen recording or screenshot
+      description: Scrollbar bugs are much easier to see than to describe. Drag a file into this box.
+  - type: textarea
+    id: code
+    attributes:
+      label: Code
+      description: A minimal snippet that shows the problem, if you can. At least the `Modifier.scrollbar(...)` call and the list it's on.
+      render: kotlin
+  - type: dropdown
+    id: platforms
+    attributes:
+      label: Platform
+      multiple: true
+      options:
+        - Android
+        - iOS
+        - Desktop (JVM)
+    validations:
+      required: true
+  - type: dropdown
+    id: list-type
+    attributes:
+      label: List type
+      multiple: true
+      options:
+        - LazyColumn
+        - LazyRow
+        - LazyVerticalGrid
+        - LazyHorizontalGrid
+    validations:
+      required: true
+  - type: checkboxes
+    id: list-details
+    attributes:
+      label: Anything unusual about the list?
+      options:
+        - label: reverseLayout
+        - label: Right-to-left layout
+        - label: Headers, sticky headers or full-span items
+        - label: Very uneven item sizes
+        - label: Paging or items loading while scrolling (hasMore)
+        - label: Custom thumb icon or visible track
+  - type: input
+    id: device
+    attributes:
+      label: Device and OS
+      placeholder: Pixel 7, Android 15 / iPhone 16 simulator, iOS 18 / Windows 11
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Library and Compose versions
+      placeholder: compose-fast-scrollbar 0.1.0, Compose Multiplatform 1.12.2
+    validations:
+      required: true

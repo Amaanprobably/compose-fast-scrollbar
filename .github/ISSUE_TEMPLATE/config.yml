@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or help using the library
+    url: https://github.com/Amaanprobably/compose-fast-scrollbar/discussions/categories/q-a
+    about: Ask in Discussions. Check the guide first, most "how do I…" answers are there.
+  - name: Guide
+    url: https://github.com/Amaanprobably/compose-fast-scrollbar/blob/master/GUIDE.md
+    about: Every feature, with code and a short video.

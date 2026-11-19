@@ -1,0 +1,20 @@
+title: ""
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Using Compose Fast Scrollbar in your app? Share it here. Custom thumbs and tracks especially welcome.
+  - type: input
+    id: app
+    attributes:
+      label: App
+      description: Name, and a link if it's public.
+    validations:
+      required: true
+  - type: textarea
+    id: show
+    attributes:
+      label: Show it off
+      description: A recording or screenshot, and anything you customized.
+    validations:
+      required: true

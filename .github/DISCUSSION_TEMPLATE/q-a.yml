@@ -1,0 +1,29 @@
+title: ""
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Most "how do I…" answers are in the [guide](https://github.com/Amaanprobably/compose-fast-scrollbar/blob/master/GUIDE.md). If something looks broken, open a [bug report](https://github.com/Amaanprobably/compose-fast-scrollbar/issues/new/choose) instead.
+  - type: textarea
+    id: question
+    attributes:
+      label: What do you want to do?
+      description: What you're trying to achieve, and what you've tried.
+    validations:
+      required: true
+  - type: textarea
+    id: code
+    attributes:
+      label: Code
+      description: Your `Modifier.scrollbar(...)` call and the list it's on.
+      render: kotlin
+  - type: dropdown
+    id: platforms
+    attributes:
+      label: Platform
+      multiple: true
+      options:
+        - Android
+        - iOS
+        - Desktop (JVM)

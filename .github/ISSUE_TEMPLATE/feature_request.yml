@@ -1,0 +1,38 @@
+name: Feature request
+description: Suggest an improvement, or something new you'd like to see.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Pull requests are closed until 1.0, so issues are how ideas get into the library. Please search the [existing issues](https://github.com/Amaanprobably/compose-fast-scrollbar/issues) first, and 👍 the ones you'd like too.
+  - type: textarea
+    id: use-case
+    attributes:
+      label: What are you trying to do?
+      description: The app or screen it's for, and why the current scrollbar doesn't cover it. The use case matters more than the exact API.
+      placeholder: I have a chat with date headers and want the label to show the date of the message under the thumb…
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like it to look like?
+      description: The behavior, and the API if you have an idea. Sketches and recordings from other apps are welcome.
+      render: markdown
+  - type: textarea
+    id: workaround
+    attributes:
+      label: How are you handling it today?
+      description: Any workaround you use now, or "I can't".
+  - type: dropdown
+    id: platforms
+    attributes:
+      label: Which platforms does it matter on?
+      multiple: true
+      options:
+        - Android
+        - iOS
+        - Desktop (JVM)
+        - All of them

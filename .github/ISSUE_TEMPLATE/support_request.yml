@@ -1,0 +1,34 @@
+name: Support request
+description: Ask for support for a list type, platform or library (for example staggered grids, Paging, a new target).
+title: "[Support]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For things the scrollbar doesn't work with yet. Check the [roadmap](https://github.com/Amaanprobably/compose-fast-scrollbar#roadmap) first, since some are already planned. If yours is listed, a 👍 on an existing issue still helps decide what comes first.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Support for
+      options:
+        - A list or layout type (for example staggered grids, ScrollState)
+        - A platform or target (for example web, iosX64)
+        - A library (for example Paging, a navigation or UI library)
+        - Something else
+    validations:
+      required: true
+  - type: input
+    id: what
+    attributes:
+      label: What exactly?
+      placeholder: LazyVerticalStaggeredGrid
+    validations:
+      required: true
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Where would you use it?
+      description: The app or screen, and what happens when you try it today.
+    validations:
+      required: true
