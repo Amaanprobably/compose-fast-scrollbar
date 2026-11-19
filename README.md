@@ -38,11 +38,11 @@ https://github.com/user-attachments/assets/8f0c4779-44e3-4107-b11b-78473a625502
 ```kotlin
 // commonMain, or your app module in a plain Android project
 dependencies {
-    implementation("io.github.amaanprobably:compose-fast-scrollbar:0.1.0")
+    implementation("io.github.amaanprobably:compose-fast-scrollbar:0.1.1")
 }
 ```
 
-**Targets:** Android (minSdk 24), iOS (`iosArm64`, `iosSimulatorArm64`) and Desktop (JVM). The library is built on Compose 1.12, so Gradle raises older Compose dependencies in your app to at least 1.12.1.
+**Requirements:** Compose 1.10 or newer (Compose Multiplatform 1.10.3+), compileSdk 36+, minSdk 24. Targets Android, iOS (`iosArm64`, `iosSimulatorArm64`) and Desktop (JVM).
 
 > **0.x versions:** the API may still change between minor versions until 1.0. Breaking changes are listed in the [changelog](CHANGELOG.md).
 

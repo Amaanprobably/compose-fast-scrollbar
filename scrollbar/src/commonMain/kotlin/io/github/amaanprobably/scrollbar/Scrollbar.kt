@@ -860,6 +860,12 @@ private const val NO_LENGTH_OVERRIDE = -1f
  */
 internal const val SCROLL_TO_END_OFFSET = 1_000_000_000
 
+/** No rebase yet in the current drag: the finger maps to the list one to one. */
+private const val NO_ANCHOR = -1f
+
+/** How close to an end of the track (in progress) counts as holding the thumb at that end. */
+private const val HELD_AT_END_TOLERANCE = 0.001f
+
 /**
  * No bounce, settles in about 300 ms. The threshold is far below a pixel: the default (0.01) would
  * end the glide 1% of the track early and snap the last few pixels.
@@ -1826,7 +1832,7 @@ private fun Modifier.scrollbarFor(
 
             // On the thumb, keep the finger's position inside it so it never jumps. On the
             // track, center the thumb under the cursor (same mapping as the hover preview).
-            var grabOffset =
+            val grabOffset =
                 if (onThumb) (downMain - geometry.start).coerceIn(0f, geometry.length)
                 else geometry.length / 2f
 
@@ -1861,7 +1867,6 @@ private fun Modifier.scrollbarFor(
                 scope.launch { target.state.stopScroll() } // cancel any running fling
 
                 var lastKey = Long.MIN_VALUE
-                var lastMainPosition = downMain
 
                 // Track click: jump right away, before the mouse moves.
                 if (!onThumb) {
@@ -1872,18 +1877,39 @@ private fun Modifier.scrollbarFor(
                     )
                 }
 
-                // The item count changed mid-drag (a page loaded, items were prepended). Refresh
-                // the metrics and continue from where the list really is, with the finger kept
-                // on the thumb's new position, so there is no fake end and no jump.
+                // The item count changed mid-drag (a page loaded, items were prepended). The thumb
+                // stays under the finger and only the mapping from finger to list is rebased: the
+                // finger's current spot maps to where the list really is, and both ends of the
+                // track still reach both ends of the list. A finger held at either end keeps going
+                // into the new items there. On release, the thumb settles to the real position.
+                var anchorVisual = NO_ANCHOR
+                var anchorList = 0f
+
+                fun listProgressFor(visual: Float): Float = when {
+                    anchorVisual == NO_ANCHOR -> visual
+                    visual >= anchorVisual -> {
+                        val room = endCap - anchorVisual
+                        if (room <= 0f) endCap
+                        else anchorList + (visual - anchorVisual) / room * (endCap - anchorList)
+                    }
+                    else -> anchorList * (visual / anchorVisual)
+                }
+
                 fun rebaseToLiveMetrics() {
-                    val shownBefore = controller.dragProgress
                     if (!metrics.update(target)) return
-                    val shownNow = metrics.progress * endCap
-                    grabOffset = lastMainPosition - startPadding -
-                            trackLength * visualProgress(shownNow, isMirrored)
-                    controller.dragProgress = shownNow
-                    controller.startGlide(shownBefore - shownNow)
+                    anchorVisual = controller.dragProgress
                     lastKey = Long.MIN_VALUE
+                    when {
+                        anchorVisual >= endCap - HELD_AT_END_TOLERANCE -> {
+                            anchorList = endCap
+                            lastKey = target.scrollToProgress(metrics, 1f, lastKey)
+                        }
+                        anchorVisual <= HELD_AT_END_TOLERANCE -> {
+                            anchorList = 0f
+                            lastKey = target.scrollToProgress(metrics, 0f, lastKey)
+                        }
+                        else -> anchorList = metrics.progress * endCap
+                    }
                 }
 
                 // Covers a finger held still while a page loads. Exists only during a drag.
@@ -1964,13 +1990,12 @@ private fun Modifier.scrollbarFor(
                         continue
                     }
                     val mainPosition = if (isVertical) change.position.y else change.position.x
-                    lastMainPosition = mainPosition
                     if (target.totalItemsCount != metrics.itemCount) rebaseToLiveMetrics()
                     // Capped while more can load, so the thumb never claims the real end.
                     controller.dragProgress = progressAt(mainPosition).coerceAtMost(endCap)
                     lastKey = target.scrollToProgress(
                         metrics,
-                        (controller.dragProgress / endCap).coerceIn(0f, 1f),
+                        (listProgressFor(controller.dragProgress) / endCap).coerceIn(0f, 1f),
                         lastKey,
                     )
                     if (labelConfig != null) {

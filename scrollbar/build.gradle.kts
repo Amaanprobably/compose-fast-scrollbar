@@ -8,14 +8,14 @@ plugins {
 }
 
 group = "io.github.amaanprobably"
-version = "0.1.0"
+version = "0.1.1"
 
 kotlin {
     explicitApi()
     android {
         namespace = "io.github.amaanprobably.scrollbar"
         compileSdk {
-            version = release(37)
+            version = release(36)
         }
         minSdk = 24
 
@@ -55,22 +55,23 @@ kotlin {
     sourceSets {
         commonMain {
             dependencies {
-                api(libs.compose.runtime)
-                api(libs.compose.foundation)
-                api(libs.compose.ui)
+                api("org.jetbrains.compose.runtime:runtime:1.10.3")
+                api("org.jetbrains.compose.foundation:foundation:1.10.3")
+                api("org.jetbrains.compose.ui:ui:1.10.3")
             }
         }
 
         commonTest {
             dependencies {
-                implementation(libs.kotlin.test)
-                implementation(libs.compose.uiTest) // runComposeUiTest, shared by all three platforms
+                implementation(kotlin("test"))
+                @OptIn(org.jetbrains.compose.ExperimentalComposeLibrary::class)
+                implementation("org.jetbrains.compose.ui:ui-test:1.10.3") // runComposeUiTest, shared by all three platforms
             }
         }
 
         getByName("desktopTest") {
             dependencies {
-                implementation(compose.desktop.currentOs) // native renderer for the test window
+                implementation(compose.desktop.currentOs.substringBeforeLast(":") + ":1.10.3") // native renderer for the test window, pinned to the library's Compose version
             }
         }
 

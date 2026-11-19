@@ -3,6 +3,12 @@
 All notable changes to this project are documented here. The project follows
 [semantic versioning](https://semver.org). While it's on 0.x, minor versions may include breaking changes.
 
+## 0.1.1 (2026-11-19)
+
+- Works with Compose 1.10+ and compileSdk 36. Apps no longer need Compose 1.12, compileSdk 37 or AGP 9.2.
+- When a page loads or items are added mid-drag, the thumb now stays under the finger, and the end of the list stays reachable in the same drag. Before, the thumb jumped away and the end couldn't be reached without grabbing it again.
+- Holding the thumb at the end of a `hasMore` list keeps loading into each new page until released.
+
 ## 0.1.0 (2026-11-19)
 
 First release.

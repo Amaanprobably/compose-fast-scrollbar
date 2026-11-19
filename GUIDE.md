@@ -31,7 +31,7 @@ Add the dependency to `commonMain` (or to your app module in a plain Android pro
 
 ```kotlin
 dependencies {
-    implementation("io.github.amaanprobably:compose-fast-scrollbar:0.1.0")
+    implementation("io.github.amaanprobably:compose-fast-scrollbar:0.1.1")
 }
 ```
 
@@ -214,6 +214,8 @@ While `hasMore` is `true`:
 - If a page loads while the user is still dragging, the drag carries on into the new items.
 
 When `hasMore` becomes `false`, the thumb glides to the true end.
+
+If the user holds the thumb at the end, the drag keeps going into each page as it loads, until they let go or `hasMore` becomes `false`. Each page still loads through your own pagination, one at a time, exactly as if the user kept scrolling to the bottom.
 
 ### Chats (reversed lists)
 

@@ -34,7 +34,7 @@ import androidx.compose.ui.test.TouchInjectionScope
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.performTouchInput
-import androidx.compose.ui.test.v2.runComposeUiTest
+import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -451,6 +451,61 @@ class ScrollbarUiTest {
         waitForIdle()
         assertEquals(200, state.layoutInfo.totalItemsCount)
         assertFalse(state.canScrollForward, "the drag should continue into the new items")
+    }
+
+    @Test
+    fun aPageLoadedWhileHoldingTheEndContinuesIntoTheNewItems() = runComposeUiTest {
+        lateinit var state: LazyListState
+        var itemCount by mutableStateOf(100)
+        setContent {
+            state = rememberLazyListState()
+            TestList(state, itemCount = itemCount, hasMore = true)
+        }
+        val list = onNodeWithTag(LIST_TAG)
+        list.performTouchInput {
+            val start = thumbAtTop()
+            down(start)
+            moveInSteps(start, Offset(right - 10f, bottom))
+        }
+        waitForIdle()
+
+        // A page loads while the finger is held still at the bottom.
+        itemCount = 200
+        waitForIdle()
+
+        val lastVisible = state.layoutInfo.visibleItemsInfo.last().index
+        assertEquals(199, lastVisible, "holding the end should continue into the new items")
+        list.performTouchInput { up() }
+    }
+
+    @Test
+    fun afterAMidDragPageLoadTheEndIsReachableWithoutLeavingTheList() = runComposeUiTest {
+        lateinit var state: LazyListState
+        var itemCount by mutableStateOf(100)
+        setContent {
+            state = rememberLazyListState()
+            TestList(state, itemCount = itemCount)
+        }
+        val list = onNodeWithTag(LIST_TAG)
+        var fingerAt = Offset.Zero
+        list.performTouchInput {
+            val start = thumbAtTop()
+            fingerAt = Offset(right - 10f, bottom / 2)
+            down(start)
+            moveInSteps(start, fingerAt)
+        }
+        waitForIdle()
+
+        itemCount = 200
+        waitForIdle()
+
+        // A real finger can't go far past the list, so stop at its bottom edge.
+        list.performTouchInput {
+            moveInSteps(fingerAt, Offset(fingerAt.x, bottom - 1f))
+            up()
+        }
+        waitForIdle()
+        assertFalse(state.canScrollForward, "the end should be reachable within the list")
     }
 
     @Test
