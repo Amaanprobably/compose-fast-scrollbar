@@ -1,6 +1,6 @@
 # Compose Fast Scrollbar guide
 
-Everything you might want to do with the scrollbar, one task per section. Each section explains when you'd want it, shows the code, and has a short video of the result.
+Everything you might want to do with the scrollbar, one task per section. Each section explains when you'd want it and shows the code. Most have a short video of the result.
 
 New here? Start with [Add a scrollbar to a list or grid](#add-a-scrollbar-to-a-list-or-grid). The rest can be read in any order.
 
@@ -91,15 +91,11 @@ Both overloads take the same parameters.
 | `scrollToEndLabel`        | `String?`                         | `null`                      | You want a screen-reader action to jump to the end.                                                                   |
 | `onEdgeChange`            | `((ScrollbarEdge) -> Unit)?`      | `null`                      | Users should be able to move the bar. See [Let users move the bar](#let-users-move-the-bar).                          |
 
-
 ---
 
 ## Show where the user will land
 
-
 https://github.com/user-attachments/assets/5ad4ff2b-640f-43bc-8442-8dcbb010cf9a
-
-
 
 A label bubble follows the thumb while it's dragged and shows where the list will land. Pass a `ScrollbarLabel`. Its lambda gets the index of the item the drag is jumping to, and returns the text to show, or `null` to hide the bubble.
 
@@ -150,7 +146,7 @@ When every item has its own text, turn the haptics off:
 ```kotlin
 Modifier.scrollbar(
     listState,
-    label = ScrollbarLabel(sectionHaptics = false) { index -> "Item ${index + 1}" },
+    label = ScrollbarLabel(sectionHaptics = false) { index -> "#${index + 1}" },
 )
 ```
 
@@ -192,9 +188,7 @@ On desktop, hovering the track with a mouse previews the label for that spot bef
 
 ## Infinite feeds, chats and paging
 
-
 https://github.com/user-attachments/assets/48e8bc28-5abe-4149-b28b-e8f2c2445482
-
 
 ### Feeds that load more as you scroll
 
@@ -247,10 +241,7 @@ If you use Paging with placeholders turned on, the list already knows its full s
 
 ## Stay clear of system bars, padding and gestures
 
-
 https://github.com/user-attachments/assets/6020fa97-ef11-4d9f-b312-928b86e9361f
-
-
 
 ### Lists with padding
 
@@ -310,10 +301,7 @@ Modifier.scrollbar(
 
 ## Change the look
 
-
 https://github.com/user-attachments/assets/36539602-bb7a-4c85-a449-80a6bdb2fa29
-
-
 
 Everything about the look lives in a `ScrollbarStyle`, created with `ScrollbarDefaults.style(...)`. Pass only what you want to change; everything else keeps the platform default.
 
@@ -411,10 +399,7 @@ Lazy lists don't know their true content size, so a proportional thumb changes l
 
 ## Use your own icon as the thumb
 
-
 https://github.com/user-attachments/assets/aa80c810-5b37-4a0e-9ad8-e652538bcb6c
-
-
 
 Replace the capsule or bar with any `Painter`: a logo, a mascot, a character.
 
@@ -434,8 +419,8 @@ Modifier.scrollbar(
 
 ```kotlin
 ThumbAppearance.Icon(
-    idle = painterResource(Res.drawable.thief),
-    pressed = painterResource(Res.drawable.thief_grabbing),
+    idle = painterResource(Res.drawable.logo),
+    pressed = painterResource(Res.drawable.logo_active),
     size = DpSize(44.dp, 44.dp),
     pressedScale = 1.15f, // grows a little while held; 1f turns it off
 )
@@ -471,9 +456,7 @@ Import the SVG as a vector drawable (Android Studio → New → Vector Asset), p
 
 ## Add a visible track
 
-
 https://github.com/user-attachments/assets/61289f76-b153-43b6-90e0-814a07049650
-
 
 The track is the path the thumb moves along. It's invisible by default. Give it a look with `trackAppearance`.
 
@@ -547,10 +530,7 @@ ScrollbarDefaults.style(
 
 ## Different looks per platform
 
-
 https://github.com/user-attachments/assets/e29dc856-bf78-4d82-8a1c-1a4b3736a9f9
-
-
 
 By default the scrollbar already follows each platform:
 
@@ -588,10 +568,7 @@ val scrollbarStyle = ScrollbarDefaults.platformStyle(
 
 ## Let users move the bar
 
-
 https://github.com/user-attachments/assets/41df05fe-3580-4771-b69b-0c97551c55ba
-
-
 
 Left-handed and one-handed users often prefer the bar on the other side. Pass `onEdgeChange` to let them move it:
 
@@ -625,10 +602,7 @@ It's touch only, and off unless you pass `onEdgeChange`. People won't guess the 
 
 ## Horizontal lists
 
-
 https://github.com/user-attachments/assets/d41fd018-3997-49a3-8bb8-bd766598c96f
-
-
 
 `LazyRow` and `LazyHorizontalGrid` work with the same modifier. On horizontal lists, `edge` means top or bottom:
 
@@ -659,9 +633,7 @@ For a horizontal list, `contentPadding` uses the start and end padding. Right-to
 
 ## Mouse and desktop
 
-
 https://github.com/user-attachments/assets/1b232689-2cb3-418c-a6af-5ead7749faeb
-
 
 With a mouse (on desktop, or a mouse connected to Android or an iPad):
 
