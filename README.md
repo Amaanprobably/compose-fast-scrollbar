@@ -106,7 +106,7 @@ Every parameter, with when to use it, is in the [guide](GUIDE.md).
 
 ## Guide
 
-[GUIDE.md](GUIDE.md) walks through everything you might want to do, with code and a short video for each:
+[GUIDE.md](GUIDE.md) walks through everything you might want to do, with code and short videos:
 
 - [Add a scrollbar to any lazy list or grid](GUIDE.md#add-a-scrollbar-to-a-list-or-grid)
 - [Show where the user will land](GUIDE.md#show-where-the-user-will-land)
@@ -141,7 +141,7 @@ Details and workarounds are in [Troubleshooting](GUIDE.md#troubleshooting).
 
 ## Contributing
 
-Bug reports, ideas and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for how to build the project, run the demo apps and run the tests.
+Bug reports, feature ideas and support requests are welcome as [issues](https://github.com/Amaanprobably/compose-fast-scrollbar/issues/new/choose). Pull requests are closed until 1.0. See [CONTRIBUTING.md](CONTRIBUTING.md) for details and for building the project from source.
 
 ## License
 
