@@ -25,8 +25,7 @@ New here? Start with [Add a scrollbar to a list or grid](#add-a-scrollbar-to-a-l
 
 ## Add a scrollbar to a list or grid
 
-<!-- VIDEO 01: basics.mp4 — dependency pasted, Modifier.scrollbar typed into a LazyColumn, then a LazyVerticalGrid; dragging both. Paste the video link on the next line. -->
-
+https://github.com/user-attachments/assets/7fb26ed4-3fd9-4ae3-b652-81d0e929feb3
 
 Add the dependency to `commonMain` (or to your app module in a plain Android project):
 
@@ -97,7 +96,9 @@ Both overloads take the same parameters.
 
 ## Show where the user will land
 
-<!-- VIDEO 02: labels.mp4 — three labels side by side: contact initials (A, B, C with haptic ticks), photo months ("Aug 2024"), and per-item numbers with haptics off; then styling the bubble. Paste the video link on the next line. -->
+
+https://github.com/user-attachments/assets/5ad4ff2b-640f-43bc-8442-8dcbb010cf9a
+
 
 
 A label bubble follows the thumb while it's dragged and shows where the list will land. Pass a `ScrollbarLabel`. Its lambda gets the index of the item the drag is jumping to, and returns the text to show, or `null` to hide the bubble.
@@ -191,7 +192,8 @@ On desktop, hovering the track with a mouse previews the label for that spot bef
 
 ## Infinite feeds, chats and paging
 
-<!-- VIDEO 03: feeds.mp4 — an infinite feed with hasMore (thumb stops short, page loads mid-drag, thumb glides to the end when done), then a reversed chat loading older messages, then items inserted at the top while dragging. Paste the video link on the next line. -->
+
+https://github.com/user-attachments/assets/48e8bc28-5abe-4149-b28b-e8f2c2445482
 
 
 ### Feeds that load more as you scroll
@@ -245,7 +247,9 @@ If you use Paging with placeholders turned on, the list already knows its full s
 
 ## Stay clear of system bars, padding and gestures
 
-<!-- VIDEO 04: insets.mp4 — an edge-to-edge list without contentPadding (track under the status bar), then with it; gesture navigation back-swipe working next to the thumb; edgePadding nudging the bar inward. Paste the video link on the next line. -->
+
+https://github.com/user-attachments/assets/6020fa97-ef11-4d9f-b312-928b86e9361f
+
 
 
 ### Lists with padding
@@ -306,7 +310,9 @@ Modifier.scrollbar(
 
 ## Change the look
 
-<!-- VIDEO 05: styling.mp4 — the default look per platform; switching Capsule → Bar; Material3 colors; Always vs AutoHide with hideDelay; Fixed vs Proportional thumb on an uneven list. Paste the video link on the next line. -->
+
+https://github.com/user-attachments/assets/36539602-bb7a-4c85-a449-80a6bdb2fa29
+
 
 
 Everything about the look lives in a `ScrollbarStyle`, created with `ScrollbarDefaults.style(...)`. Pass only what you want to change; everything else keeps the platform default.
@@ -405,7 +411,9 @@ Lazy lists don't know their true content size, so a proportional thumb changes l
 
 ## Use your own icon as the thumb
 
-<!-- VIDEO 06: icon-thumb.mp4 — a logo thumb, then separate idle and pressed icons, tint on a one-color vector, pressedScale, and an RTL list with autoMirror. Paste the video link on the next line. -->
+
+https://github.com/user-attachments/assets/aa80c810-5b37-4a0e-9ad8-e652538bcb6c
+
 
 
 Replace the capsule or bar with any `Painter`: a logo, a mascot, a character.
@@ -463,7 +471,8 @@ Import the SVG as a vector drawable (Android Studio → New → Vector Asset), p
 
 ## Add a visible track
 
-<!-- VIDEO 07: track.mp4 — a plain Line track (Full), then an Image rope with UpToThumb + Stretch and a thief thumb, then a ladder with Repeat and a firefighter thumb, then tileLength and tint. Paste the video link on the next line. -->
+
+https://github.com/user-attachments/assets/61289f76-b153-43b6-90e0-814a07049650
 
 
 The track is the path the thumb moves along. It's invisible by default. Give it a look with `trackAppearance`.
@@ -538,7 +547,9 @@ ScrollbarDefaults.style(
 
 ## Different looks per platform
 
-<!-- VIDEO 08: platforms.mp4 — the same screen on Android, iOS and desktop with the defaults, then with platformStyle giving each its own look. Paste the video link on the next line. -->
+
+https://github.com/user-attachments/assets/e29dc856-bf78-4d82-8a1c-1a4b3736a9f9
+
 
 
 By default the scrollbar already follows each platform:
@@ -577,7 +588,9 @@ val scrollbarStyle = ScrollbarDefaults.platformStyle(
 
 ## Let users move the bar
 
-<!-- VIDEO 09: movable.mp4 — hold the thumb still, the two-way arrow appears, drag it across, it snaps to the other edge; the choice saved in settings. Paste the video link on the next line. -->
+
+https://github.com/user-attachments/assets/41df05fe-3580-4771-b69b-0c97551c55ba
+
 
 
 Left-handed and one-handed users often prefer the bar on the other side. Pass `onEdgeChange` to let them move it:
@@ -612,7 +625,9 @@ It's touch only, and off unless you pass `onEdgeChange`. People won't guess the 
 
 ## Horizontal lists
 
-<!-- VIDEO 10: horizontal.mp4 — a LazyRow shelf with the bar at the bottom and a year label, then moving it to the top with edge = Start, then a LazyHorizontalGrid. Paste the video link on the next line. -->
+
+https://github.com/user-attachments/assets/d41fd018-3997-49a3-8bb8-bd766598c96f
+
 
 
 `LazyRow` and `LazyHorizontalGrid` work with the same modifier. On horizontal lists, `edge` means top or bottom:
@@ -644,7 +659,8 @@ For a horizontal list, `contentPadding` uses the start and end padding. Right-to
 
 ## Mouse and desktop
 
-<!-- VIDEO 11: mouse.mp4 — on desktop: hovering reveals the bar, hovering the track previews the label, clicking the track jumps there, dragging with the mouse; wheel scrolling still reaching the list. Paste the video link on the next line. -->
+
+https://github.com/user-attachments/assets/1b232689-2cb3-418c-a6af-5ead7749faeb
 
 
 With a mouse (on desktop, or a mouse connected to Android or an iPad):
@@ -667,9 +683,6 @@ ScrollbarDefaults.compactStyle(
 ---
 
 ## Accessibility
-
-<!-- VIDEO 12: accessibility.mp4 — TalkBack reading the list, opening the actions menu, choosing "Scroll to top". Paste the video link on the next line. -->
-
 
 Screen-reader users can't drag a thumb. Give them actions to jump to either end instead:
 
