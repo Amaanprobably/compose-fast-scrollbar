@@ -150,3 +150,5 @@ Copyright 2026 Amaan Qureshi
 Licensed under the [Apache License, Version 2.0](LICENSE). You can use this library in any app, commercial or open source. If you redistribute it or a modified version, keep the copyright notice and the [NOTICE](NOTICE) file.
 
 The demo app's artwork (launcher icon and characters) is licensed separately under [CC BY-NC-ND 4.0](ASSETS-LICENSE.md).
+
+The music in the demo videos is "Lo-Fi Background Lounge" by lsMusic, used under the [Pixabay Content License](https://pixabay.com/service/license-summary/).
