@@ -9,16 +9,17 @@
 </h1>
 
 <p align="center">
-  <a href="https://github.com/Amaanprobably/compose-fast-scrollbar/actions/workflows/ci.yml">
-    <img src="https://github.com/Amaanprobably/compose-fast-scrollbar/actions/workflows/ci.yml/badge.svg" alt="CI">
-  </a>
+  <a href="https://github.com/Amaanprobably/compose-fast-scrollbar/actions/workflows/ci.yml"><img src="https://github.com/Amaanprobably/compose-fast-scrollbar/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://central.sonatype.com/artifact/io.github.amaanprobably/compose-fast-scrollbar"><img src="https://img.shields.io/maven-central/v/io.github.amaanprobably/compose-fast-scrollbar" alt="Maven Central"></a>
 </p>
 
 A draggable fast scrollbar for Jetpack Compose and Compose Multiplatform: LazyColumn, LazyRow and grids. One modifier, no wrapper composable, works on Android, iOS and Desktop.
 
 > **Status:** early (0.x). The full test suite passes on Android devices, Desktop and the iOS simulator.
 
-<!-- Demo goes here https://github.com/user-attachments/assets/06303131-9ad1-4fa0-8101-cde98678515f -->
+## Demo
+
+https://github.com/user-attachments/assets/8f0c4779-44e3-4107-b11b-78473a625502
 
 ## Features
 
