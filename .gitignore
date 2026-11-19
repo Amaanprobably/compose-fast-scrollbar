@@ -6,6 +6,7 @@ xcuserdata
 !src/**/build/
 local.properties
 TestCommands.md
+androidApp/release/
 .idea
 .DS_Store
 captures
