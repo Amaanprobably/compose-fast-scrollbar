@@ -107,8 +107,9 @@ public enum class ScrollbarEdge { Start, End }
  * How the thumb's length is chosen.
  *
  * Lazy lists don't know their true content size, so a proportional thumb can't be fully stable
- * on variable-height content. [Fixed] sidesteps that and is the default, like the platform
- * fast scrollers.
+ * on variable-height content. [Fixed] sidesteps that and is the default on touch screens, like the
+ * platform fast scrollers. Desktop defaults to a smoothed [Proportional] thumb, like system
+ * scrollbars.
  */
 @Immutable
 public sealed interface ThumbSizing {
@@ -981,6 +982,9 @@ private val GLIDE_SPRING = spring(
 /** Marks that the draw phase has no previous frame to compare with. */
 private const val NO_BASELINE = -1
 
+/** Emitted by the thumb-size smoothing while the bar isn't drawn. */
+private const val HIDDEN_FRACTION = -1f
+
 /**
  * While more items can still load, the thumb stops here instead of at the very end, because the
  * real end isn't known yet.
@@ -1179,12 +1183,22 @@ private class ScrollbarController(
     /** Smoothed viewport/content ratio. Only used by [ThumbSizing.Proportional] with smoothing. */
     val smoothedFraction = Animatable(1f)
 
+    /**
+     * The target [smoothedFraction] holds a real value for, or null while it holds none: before
+     * its first value, while the bar isn't drawn, and while smoothing is off. Until then the raw
+     * size is drawn, because the smoothing only catches up a frame after a change. Plain field:
+     * it's only read together with [smoothedFraction].
+     */
+    var smoothedTarget: ScrollbarTarget? = null
+
     /** Fraction shown at grab time, held for the whole drag so the thumb never resizes. */
     var frozenFraction = 1f
 
-    fun displayedFraction(sizing: ThumbSizing, rawFraction: Float): Float =
-        if (sizing is ThumbSizing.Proportional && sizing.smoothed) smoothedFraction.value
-        else rawFraction
+    fun displayedFraction(target: ScrollbarTarget, sizing: ThumbSizing, rawFraction: Float): Float {
+        if (sizing !is ThumbSizing.Proportional || !sizing.smoothed) return rawFraction
+        val smoothed = smoothedFraction.value // read every time, so the draw follows the animation
+        return if (smoothedTarget === target) smoothed else rawFraction
+    }
 
     /** Where the list sits in the Compose root, for system gesture exclusion. Set after layout. */
     var positionInRoot = Offset.Zero
@@ -1778,7 +1792,7 @@ private fun Density.layoutThumbForInput(
         startPadding = config.mainAxisStartPaddingPx(this, isVertical),
         endPadding = config.mainAxisEndPaddingPx(this, isVertical),
         sizing = style.thumbSizing,
-        fraction = controller.displayedFraction(style.thumbSizing, metrics.thumbFraction),
+        fraction = controller.displayedFraction(target, style.thumbSizing, metrics.thumbFraction),
         visualProgress = visualProgress(metrics.progress * config.endCap, config.isMirrored(target)),
         lengthOverride = iconMainAxisLength(style, isVertical),
     )
@@ -1856,29 +1870,35 @@ private fun Modifier.scrollbarFor(
     // The default fixed thumb doesn't launch it, so it doesn't re-run on every scroll frame.
     val sizingOption = style.thumbSizing
     val smoothingEnabled = sizingOption is ThumbSizing.Proportional && sizingOption.smoothed
+    // Before the draw, so a thumb switched to smoothing later never shows a value from before.
+    SideEffect { if (!smoothingEnabled) controller.smoothedTarget = null }
     LaunchedEffect(controller, target, smoothingEnabled) {
         if (!smoothingEnabled) return@LaunchedEffect
-        var hasBaseline = false
         snapshotFlow {
             val sizing = latestConfig.style.thumbSizing
             val indicator = target.state.scrollIndicatorState
-            if (sizing is ThumbSizing.Proportional && sizing.smoothed &&
-                indicator != null && indicator.contentSize > 0
-            ) {
-                (indicator.viewportSize.toFloat() / indicator.contentSize).coerceIn(0f, 1f)
-            } else {
-                null
+            when {
+                sizing !is ThumbSizing.Proportional || !sizing.smoothed || indicator == null -> null
+                // The same test the draw phase uses to skip the bar.
+                indicator.viewportSize <= 0 ||
+                        indicator.contentSize <= indicator.viewportSize ||
+                        target.totalItemsCount < latestConfig.minItemsToShow -> HIDDEN_FRACTION
+                else -> indicator.viewportSize.toFloat() / indicator.contentSize
             }
         }.collectLatest { rawFraction ->
-            if (rawFraction == null) return@collectLatest
-            if (hasBaseline) {
-                controller.smoothedFraction.animateTo(
+            when {
+                rawFraction == null -> Unit
+                // The bar isn't drawn (the draw phase also clears this, a frame sooner): when it
+                // shows up again, the thumb starts at its real length instead of a stale one.
+                rawFraction == HIDDEN_FRACTION -> controller.smoothedTarget = null
+                controller.smoothedTarget === target -> controller.smoothedFraction.animateTo(
                     rawFraction,
                     spring(stiffness = Spring.StiffnessMediumLow),
                 )
-            } else {
-                controller.smoothedFraction.snapTo(rawFraction)
-                hasBaseline = true
+                else -> {
+                    controller.smoothedFraction.snapTo(rawFraction)
+                    controller.smoothedTarget = target
+                }
             }
         }
     }
@@ -1923,7 +1943,7 @@ private fun Modifier.scrollbarFor(
             val startPadding = currentConfig.mainAxisStartPaddingPx(this, isVertical)
             val trackLength = geometry.trackLength
             val shownFraction =
-                controller.displayedFraction(currentConfig.style.thumbSizing, metrics.thumbFraction)
+                controller.displayedFraction(target, currentConfig.style.thumbSizing, metrics.thumbFraction)
 
             val onThumb =
                 downMain in (geometry.start - slop)..(geometry.start + geometry.length + slop)
@@ -2287,6 +2307,7 @@ private fun Modifier.scrollbarFor(
                 val itemCount = target.totalItemsCount
                 if (viewport <= 0f || content <= viewport || itemCount < config.minItemsToShow) {
                     controller.lastDrawnCount = NO_BASELINE // nothing drawn, nothing to compare
+                    controller.smoothedTarget = null // shows up again at its real length
                     controller.releaseThumb(edgeGuard)
                     return@drawWithContent
                 }
@@ -2317,7 +2338,7 @@ private fun Modifier.scrollbarFor(
                     return@drawWithContent
                 }
 
-                fraction = controller.displayedFraction(style.thumbSizing, viewport / content)
+                fraction = controller.displayedFraction(target, style.thumbSizing, viewport / content)
                 // After release, glide from where the finger left to the real position.
                 // The glide offset hides jumps from item count changes.
                 progress = (
