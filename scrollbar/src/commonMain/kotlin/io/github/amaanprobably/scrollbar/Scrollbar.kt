@@ -369,6 +369,12 @@ internal enum class Platform { Android, Ios, Desktop }
 
 internal expect val currentPlatform: Platform
 
+/**
+ * Whether the bar hides when idle by default, following each system's own scrollbars: Android,
+ * iOS and macOS hide theirs after scrolling, Windows and Linux desktops keep theirs visible.
+ */
+internal expect val platformDefaultVisibility: ScrollbarVisibility
+
 /** The look and size defaults, which differ per platform. */
 internal class StyleDefaults(
     val thumbAppearance: ThumbAppearance,
@@ -443,6 +449,9 @@ public object ScrollbarDefaults {
      * grabbed on iOS, and a mouse-sized bar on desktop. Use [compactStyle] for the desktop look
      * everywhere, or pass `thumbAppearance` to pick a look yourself.
      *
+     * Visibility follows the system's own scrollbars too: [ScrollbarVisibility.Always] on Windows
+     * and Linux, [ScrollbarVisibility.AutoHide] on Android, iOS and macOS.
+     *
      * It is a plain function, so it can be hoisted into a top-level `val` and shared.
      */
     public fun style(
@@ -450,7 +459,7 @@ public object ScrollbarDefaults {
         pressedThumbThickness: Dp = PlatformDefaults.pressedThumbThickness,
         thumbSizing: ThumbSizing = ThumbSizing.Fixed(PlatformDefaults.thumbLength),
         thumbAppearance: ThumbAppearance = PlatformDefaults.thumbAppearance,
-        visibility: ScrollbarVisibility = ScrollbarVisibility.AutoHide,
+        visibility: ScrollbarVisibility = platformDefaultVisibility,
         touchTargetThickness: Dp = PlatformDefaults.touchTargetThickness,
         trackPadding: Dp = PlatformDefaults.trackPadding,
         edgePadding: Dp = PlatformDefaults.edgePadding,
@@ -525,7 +534,7 @@ public object ScrollbarDefaults {
         pressedThumbThickness: Dp = CompactDefaults.pressedThumbThickness,
         thumbSizing: ThumbSizing = ThumbSizing.Fixed(CompactDefaults.thumbLength),
         thumbAppearance: ThumbAppearance = CompactDefaults.thumbAppearance,
-        visibility: ScrollbarVisibility = ScrollbarVisibility.AutoHide,
+        visibility: ScrollbarVisibility = platformDefaultVisibility,
         touchTargetThickness: Dp = CompactDefaults.touchTargetThickness,
         trackPadding: Dp = CompactDefaults.trackPadding,
         edgePadding: Dp = CompactDefaults.edgePadding,

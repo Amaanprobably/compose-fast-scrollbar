@@ -111,7 +111,7 @@ internal fun DemoTheme(content: @Composable () -> Unit) {
  */
 @Composable
 internal fun brandScrollbarStyle(
-    visibility: ScrollbarVisibility = ScrollbarVisibility.AutoHide,
+    visibility: ScrollbarVisibility = ScrollbarDefaults.style().visibility,
     thumbAppearance: ThumbAppearance? = null,
     thumbSizing: ThumbSizing? = null,
 ): ScrollbarStyle {

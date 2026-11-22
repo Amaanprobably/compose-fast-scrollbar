@@ -388,6 +388,16 @@ class StyleDefaultsTest {
     }
 
     @Test
+    fun defaultVisibilityFollowsThePlatform() {
+        assertEquals(platformDefaultVisibility, ScrollbarDefaults.style().visibility)
+        assertEquals(platformDefaultVisibility, ScrollbarDefaults.compactStyle().visibility)
+        assertEquals(platformDefaultVisibility, DefaultScrollbarStyle.visibility)
+        if (currentPlatform != Platform.Desktop) {
+            assertEquals(ScrollbarVisibility.AutoHide, platformDefaultVisibility, "touch platforms hide when idle")
+        }
+    }
+
+    @Test
     fun compactStyleIsTheDesktopLookEverywhere() {
         val compact = ScrollbarDefaults.compactStyle()
         assertEquals(ThumbAppearance.Bar, compact.thumbAppearance)

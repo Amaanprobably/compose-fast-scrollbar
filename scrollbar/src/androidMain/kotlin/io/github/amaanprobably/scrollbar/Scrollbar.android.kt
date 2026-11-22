@@ -10,6 +10,9 @@ import kotlin.math.roundToInt
 
 internal actual val currentPlatform: Platform = Platform.Android
 
+/** Android's scrollbars and fast scroller fade out when scrolling stops. */
+internal actual val platformDefaultVisibility: ScrollbarVisibility = ScrollbarVisibility.AutoHide
+
 @Composable
 internal actual fun rememberEdgeGestureGuard(): EdgeGestureGuard {
     val view = LocalView.current

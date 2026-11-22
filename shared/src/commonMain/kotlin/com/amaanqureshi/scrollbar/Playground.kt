@@ -43,6 +43,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import io.github.amaanprobably.scrollbar.ScrollbarDefaults
 import io.github.amaanprobably.scrollbar.ScrollbarEdge
 import io.github.amaanprobably.scrollbar.ScrollbarLabel
 import io.github.amaanprobably.scrollbar.ScrollbarLabelStyle
@@ -82,9 +83,11 @@ internal fun PlaygroundScreen(onBack: () -> Unit) {
     var rightToLeft by rememberSaveable { mutableStateOf(false) }
     var reverseLayout by rememberSaveable { mutableStateOf(false) }
     var withPadding by rememberSaveable { mutableStateOf(false) }
-    var alwaysVisible by rememberSaveable { mutableStateOf(false) }
     var showLabel by rememberSaveable { mutableStateOf(true) }
     var shortContainer by rememberSaveable { mutableStateOf(false) }
+    var alwaysVisible by rememberSaveable {
+        mutableStateOf(ScrollbarDefaults.style().visibility == ScrollbarVisibility.Always)
+    }
     // On (the default), only the top is padded, like a typical app, so the list reaches the side
     // edges (the back gesture zones) and runs under the gesture bar. Off, safeContentPadding()
     // pads every side by the gesture zones too, which keeps the bar away from the back gesture.
