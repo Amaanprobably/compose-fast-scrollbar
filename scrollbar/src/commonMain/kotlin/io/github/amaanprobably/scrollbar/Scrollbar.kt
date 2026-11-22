@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.ScrollableState
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -651,7 +652,59 @@ public fun Modifier.scrollbar(
     )
 }
 
-// Targets: what the scrollbar needs from a lazy layout, so lists and grids share one code path.
+/**
+ * Draggable fast scroller for a plain scrollable [androidx.compose.foundation.layout.Column] or
+ * [androidx.compose.foundation.layout.Row], one that uses
+ * [androidx.compose.foundation.verticalScroll] or [androidx.compose.foundation.horizontalScroll].
+ *
+ * Put it **before** the scroll modifier, on the same element, so it stays on the visible area
+ * instead of scrolling away with the content:
+ *
+ * ```
+ * val scrollState = rememberScrollState()
+ * Column(
+ *     Modifier
+ *         .fillMaxSize()
+ *         .scrollbar(scrollState)
+ *         .verticalScroll(scrollState)
+ * ) { ... }
+ * ```
+ *
+ * Positions are exact, because a scroll state knows the full size of its content.
+ *
+ * @param label Shows a bubble next to the thumb while it is dragged. Its lambda gets the scroll
+ * offset, in pixels from the start of the content, that the drag is jumping to (not an item index),
+ * so map it to your own sections, like the page or heading at that offset. It runs on almost every
+ * pixel of a drag, so keep the lookup cheap, for example a binary search over section offsets.
+ *
+ * @param orientation [Orientation.Vertical] for `verticalScroll`, [Orientation.Horizontal] for
+ * `horizontalScroll`.
+ * @param reverseScrolling The same `reverseScrolling` passed to the scroll modifier.
+ */
+@Composable
+public fun Modifier.scrollbar(
+    scrollState: ScrollState,
+    orientation: Orientation = Orientation.Vertical,
+    reverseScrolling: Boolean = false,
+    edge: ScrollbarEdge = ScrollbarEdge.End,
+    contentPadding: PaddingValues = PaddingValues(0.dp),
+    style: ScrollbarStyle = DefaultScrollbarStyle,
+    label: ScrollbarLabel? = null,
+    scrollToStartLabel: String? = null,
+    scrollToEndLabel: String? = null,
+    onEdgeChange: ((ScrollbarEdge) -> Unit)? = null,
+): Modifier {
+    val target = remember(scrollState, orientation, reverseScrolling) {
+        ScrollStateScrollbarTarget(scrollState, orientation == Orientation.Vertical, reverseScrolling)
+    }
+    return scrollbarFor(
+        target, edge, contentPadding, minItemsToShow = 0, hasMore = false, style, label,
+        scrollToStartLabel, scrollToEndLabel, onEdgeChange,
+    )
+}
+
+// Targets: what the scrollbar needs from a scrollable, so lists, grids and scroll states share one
+// code path.
 
 internal interface ScrollbarTarget {
     val state: ScrollableState
@@ -741,6 +794,37 @@ private class GridScrollbarTarget(override val state: LazyGridState) : Scrollbar
 
     override fun requestScrollToItem(index: Int, offset: Int) =
         state.requestScrollToItem(index, offset)
+}
+
+/**
+ * A plain scrollable Column or Row. It has no items, so one pixel of content counts as one item:
+ * the average line length is then exactly 1 px, and every position computed from it is exact.
+ *
+ * The item count comes from the scroll indicator, which reports 0 until the first measure, so the
+ * bar stays hidden until then ([ScrollState.maxValue] is [Int.MAX_VALUE] before that).
+ */
+internal class ScrollStateScrollbarTarget(
+    override val state: ScrollState,
+    override val isVertical: Boolean,
+    override val isReversed: Boolean,
+) : ScrollbarTarget {
+    override val totalItemsCount: Int
+        get() = state.scrollIndicatorState?.contentSize ?: 0
+    override val itemsPerLine: Int
+        get() = 1
+    override val firstVisibleItemIndex: Int
+        get() = state.value
+    override val firstVisibleItemScrollOffset: Int
+        get() = 0
+
+    /**
+     * Non-suspending, like the lists' requestScrollToItem. The scroll state clamps the delta to
+     * 0..maxValue itself, so the end offset only needs to stay inside Int.
+     */
+    override fun requestScrollToItem(index: Int, offset: Int) {
+        val targetPx = (index.toLong() + offset).coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
+        state.dispatchRawDelta((targetPx - state.value).toFloat())
+    }
 }
 
 // METRICS AND GEOMETRY
@@ -876,7 +960,7 @@ private const val NO_ANCHOR = -1f
 private const val HELD_AT_END_TOLERANCE = 0.001f
 
 /**
- * No bounce, settles in about 300 ms. The threshold is far below a pixel: the default (0.01) would
+ * No bounce, settles in about 300ms. The threshold is far below a pixel: the default (0.01) would
  * end the glide 1% of the track early and snap the last few pixels.
  */
 private val GLIDE_SPRING = spring(
@@ -1048,7 +1132,7 @@ private class ScrollbarController(
 
     /**
      * A new glide offset waiting for [glide] to take it over, or NaN. `snapTo` can't apply until a
-     * cancelled glide has let go, which can be a frame later, and that frame would draw the jump
+     * canceled glide has let go, which can be a frame later, and that frame would draw the jump
      * the glide exists to hide. Plain field: it's only read together with [glide].
      */
     private var pendingGlide = Float.NaN
@@ -1284,7 +1368,7 @@ private class ScrollbarController(
      */
     fun startGlide(delta: Float) {
         if (abs(delta) < 0.002f) return
-        // Read before cancelling: a cancelled animation forgets its velocity.
+        // Read before cancelling: a canceled animation forgets its velocity.
         val velocity = glide.velocity
         val offset = (glideOffset + delta).coerceIn(-1f, 1f)
         // Only carry speed that heads toward the real position. Speed the other way (left over
@@ -2111,18 +2195,26 @@ private fun Modifier.scrollbarFor(
         }
     }
 
-    val accessibilityModifier = remember(target, scrollToStartLabel, scrollToEndLabel) {
+    // Each jump first stops a running fling: a plain scroll state's jump doesn't cancel one, so
+    // the fling would carry on from the new position.
+    val accessibilityModifier = remember(target, scope, scrollToStartLabel, scrollToEndLabel) {
         val actions = listOfNotNull(
             scrollToStartLabel?.let { label ->
                 CustomAccessibilityAction(label) {
-                    target.requestScrollToItem(0, 0)
+                    scope.launch {
+                        target.state.stopScroll()
+                        target.requestScrollToItem(0, 0)
+                    }
                     true
                 }
             },
             scrollToEndLabel?.let { label ->
                 CustomAccessibilityAction(label) {
-                    // The list clamps this to its true end, even past a tall last item.
-                    target.requestScrollToItem((target.totalItemsCount - 1).coerceAtLeast(0), SCROLL_TO_END_OFFSET)
+                    scope.launch {
+                        target.state.stopScroll()
+                        // The list clamps this to its true end, even past a tall last item.
+                        target.requestScrollToItem((target.totalItemsCount - 1).coerceAtLeast(0), SCROLL_TO_END_OFFSET)
+                    }
                     true
                 }
             },

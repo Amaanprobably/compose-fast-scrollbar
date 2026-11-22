@@ -124,6 +124,15 @@ internal enum class Showcase(
         accent = Brand.Lime,
         onAccent = Brand.Ink,
     ),
+    Book(
+        number = "09",
+        title = "Book",
+        blurb = "Fifty pages in a plain Column, no lazy list. Every position is exact.",
+        hint = "Drag the thumb. The bubble shows the page, with a tick at each new one.",
+        tags = listOf("ScrollState", "exact"),
+        accent = Brand.VioletBright,
+        onAccent = Brand.Ink,
+    ),
 }
 
 /** The bottom navigation bar inset, so edge-to-edge lists can pad their last item above it. */

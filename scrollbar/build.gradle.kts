@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "io.github.amaanprobably"
-version = "0.1.1"
+version = "0.2.0"
 
 kotlin {
     explicitApi()
@@ -126,5 +126,6 @@ mavenPublishing {
 tasks.withType<Test>().matching { it.name == "testAndroidHostTest" }.configureEach {
     filter {
         excludeTestsMatching("io.github.amaanprobably.scrollbar.ScrollbarUiTest")
+        excludeTestsMatching("io.github.amaanprobably.scrollbar.ScrollbarScrollStateTest")
     }
 }

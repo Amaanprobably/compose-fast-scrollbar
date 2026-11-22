@@ -58,6 +58,7 @@ fun App(
                 Showcase.Shelf -> ShelfScreen(goHome)
                 Showcase.Track -> TrackScreen(goHome)
                 Showcase.Playground -> PlaygroundScreen(goHome)
+                Showcase.Book -> BookScreen(goHome)
             }
         }
     }
