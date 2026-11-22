@@ -17,6 +17,7 @@ private val testDensity = Density(1f) // 1 dp == 1 px
 // Explicit values, so these tests don't depend on the platform defaults.
 private val testStyle = ScrollbarDefaults.style(
     thumbAppearance = ThumbAppearance.Capsule,
+    thumbSizing = ThumbSizing.Fixed(40.dp),
     thumbThickness = 5.dp,
     pressedThumbThickness = 12.dp,
     touchTargetThickness = 48.dp,
@@ -395,6 +396,16 @@ class StyleDefaultsTest {
         if (currentPlatform != Platform.Desktop) {
             assertEquals(ScrollbarVisibility.AutoHide, platformDefaultVisibility, "touch platforms hide when idle")
         }
+    }
+
+    @Test
+    fun thumbSizingFollowsThePlatform() {
+        val sizing = ScrollbarDefaults.style().thumbSizing
+        when (currentPlatform) {
+            Platform.Desktop -> assertTrue(sizing is ThumbSizing.Proportional && sizing.smoothed && sizing.minLength == 24.dp)
+            Platform.Android, Platform.Ios -> assertEquals(40.dp, (sizing as ThumbSizing.Fixed).length)
+        }
+        assertTrue(ScrollbarDefaults.compactStyle().thumbSizing is ThumbSizing.Proportional)
     }
 
     @Test

@@ -382,6 +382,7 @@ internal class StyleDefaults(
     val thumbThickness: Dp,
     val pressedThumbThickness: Dp,
     val thumbLength: Dp,
+    val thumbSizing: ThumbSizing,
     val touchTargetThickness: Dp,
     val trackPadding: Dp,
     val edgePadding: Dp,
@@ -399,6 +400,7 @@ internal val AndroidDefaults = StyleDefaults(
     thumbThickness = 5.dp,
     pressedThumbThickness = 8.dp,
     thumbLength = 40.dp,
+    thumbSizing = ThumbSizing.Fixed(40.dp),
     touchTargetThickness = 48.dp,
     trackPadding = 8.dp,
     edgePadding = 4.dp,
@@ -415,6 +417,7 @@ internal val IosDefaults = StyleDefaults(
     thumbThickness = 3.dp,
     pressedThumbThickness = 8.dp,
     thumbLength = 40.dp,
+    thumbSizing = ThumbSizing.Fixed(40.dp),
     touchTargetThickness = 48.dp,
     trackPadding = 6.dp,
     edgePadding = 3.dp,
@@ -422,12 +425,17 @@ internal val IosDefaults = StyleDefaults(
     capsuleExtraLength = 24.dp,
 )
 
-/** Mouse-sized: a single thin bar, like desktop scrollbars. */
+/**
+ * Mouse-sized: a single thin bar, like desktop scrollbars. Its length follows how much of the
+ * content is visible, like the system scrollbars on macOS, Windows and Linux. Smoothed, so the
+ * changing size estimate of a lazy list with uneven items doesn't make it jitter.
+ */
 internal val CompactDefaults = StyleDefaults(
     thumbAppearance = ThumbAppearance.Bar,
     thumbThickness = 8.dp,
     pressedThumbThickness = 12.dp,
     thumbLength = 40.dp,
+    thumbSizing = ThumbSizing.Proportional(minLength = 24.dp),
     touchTargetThickness = 16.dp,
     trackPadding = 4.dp,
     edgePadding = 2.dp,
@@ -451,14 +459,15 @@ public object ScrollbarDefaults {
      * everywhere, or pass `thumbAppearance` to pick a look yourself.
      *
      * Visibility follows the system's own scrollbars too: [ScrollbarVisibility.Always] on Windows
-     * and Linux, [ScrollbarVisibility.AutoHide] on Android, iOS and macOS.
+     * and Linux, [ScrollbarVisibility.AutoHide] on Android, iOS and macOS. On desktop the thumb is
+     * [ThumbSizing.Proportional], like system scrollbars; on touch screens it's a fixed 40dp handle.
      *
      * It is a plain function, so it can be hoisted into a top-level `val` and shared.
      */
     public fun style(
         thumbThickness: Dp = PlatformDefaults.thumbThickness,
         pressedThumbThickness: Dp = PlatformDefaults.pressedThumbThickness,
-        thumbSizing: ThumbSizing = ThumbSizing.Fixed(PlatformDefaults.thumbLength),
+        thumbSizing: ThumbSizing = PlatformDefaults.thumbSizing,
         thumbAppearance: ThumbAppearance = PlatformDefaults.thumbAppearance,
         visibility: ScrollbarVisibility = platformDefaultVisibility,
         touchTargetThickness: Dp = PlatformDefaults.touchTargetThickness,
@@ -533,7 +542,7 @@ public object ScrollbarDefaults {
     public fun compactStyle(
         thumbThickness: Dp = CompactDefaults.thumbThickness,
         pressedThumbThickness: Dp = CompactDefaults.pressedThumbThickness,
-        thumbSizing: ThumbSizing = ThumbSizing.Fixed(CompactDefaults.thumbLength),
+        thumbSizing: ThumbSizing = CompactDefaults.thumbSizing,
         thumbAppearance: ThumbAppearance = CompactDefaults.thumbAppearance,
         visibility: ScrollbarVisibility = platformDefaultVisibility,
         touchTargetThickness: Dp = CompactDefaults.touchTargetThickness,
