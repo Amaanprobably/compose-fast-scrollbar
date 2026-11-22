@@ -7,17 +7,17 @@ New here? Start with [Add a scrollbar to a list or grid](#add-a-scrollbar-to-a-l
 ## Contents
 
 1. [Add a scrollbar to a list or grid](#add-a-scrollbar-to-a-list-or-grid)
-2. [Plain Columns and Rows](#plain-columns-and-rows)
-3. [Show where the user will land](#show-where-the-user-will-land)
-4. [Infinite feeds, chats and paging](#infinite-feeds-chats-and-paging)
-5. [Stay clear of system bars, padding and gestures](#stay-clear-of-system-bars-padding-and-gestures)
-6. [Change the look](#change-the-look)
-7. [Use your own icon as the thumb](#use-your-own-icon-as-the-thumb)
-8. [Add a visible track](#add-a-visible-track)
-9. [Different looks per platform](#different-looks-per-platform)
-10. [Let users move the bar](#let-users-move-the-bar)
-11. [Horizontal lists](#horizontal-lists)
-12. [Mouse and desktop](#mouse-and-desktop)
+2. [Show where the user will land](#show-where-the-user-will-land)
+3. [Infinite feeds, chats and paging](#infinite-feeds-chats-and-paging)
+4. [Stay clear of system bars, padding and gestures](#stay-clear-of-system-bars-padding-and-gestures)
+5. [Change the look](#change-the-look)
+6. [Use your own icon as the thumb](#use-your-own-icon-as-the-thumb)
+7. [Add a visible track](#add-a-visible-track)
+8. [Different looks per platform](#different-looks-per-platform)
+9. [Let users move the bar](#let-users-move-the-bar)
+10. [Horizontal lists](#horizontal-lists)
+11. [Mouse and desktop](#mouse-and-desktop)
+12. [Plain Columns and Rows](#plain-columns-and-rows)
 13. [Accessibility](#accessibility)
 14. [API reference](#api-reference)
 15. [Troubleshooting](#troubleshooting)
@@ -91,82 +91,6 @@ The list and grid overloads take the same parameters. The `ScrollState` overload
 | `scrollToStartLabel`      | `String?`                         | `null`                      | You want a screen-reader action to jump to the start. See [Accessibility](#accessibility).                            |
 | `scrollToEndLabel`        | `String?`                         | `null`                      | You want a screen-reader action to jump to the end.                                                                   |
 | `onEdgeChange`            | `((ScrollbarEdge) -> Unit)?`      | `null`                      | Users should be able to move the bar. See [Let users move the bar](#let-users-move-the-bar).                          |
-
----
-
-## Plain Columns and Rows
-
-<!-- video -->
-
-For content that isn't a lazy list (articles, settings screens, terms, long forms), pass the `ScrollState` of a `Column` with `verticalScroll` or a `Row` with `horizontalScroll`:
-
-```kotlin
-val scrollState = rememberScrollState()
-
-Column(
-    Modifier
-        .fillMaxSize()
-        .scrollbar(scrollState)
-        .verticalScroll(scrollState)
-) { /* long content */ }
-```
-
-**Put `scrollbar` before `verticalScroll`**, on the same element. Placed after it, the bar sits inside the scrolled content and scrolls away with it.
-
-A scroll state knows the full size of its content, so positions are exact, unlike the estimate lazy lists need.
-
-### Horizontal and reversed
-
-The scroll state doesn't know its direction, so pass the same values the scroll modifier uses:
-
-```kotlin
-Row(
-    Modifier
-        .scrollbar(scrollState, orientation = Orientation.Horizontal)
-        .horizontalScroll(scrollState)
-) { /* ... */ }
-
-Column(
-    Modifier
-        .scrollbar(scrollState, reverseScrolling = true)
-        .verticalScroll(scrollState, reverseScrolling = true)
-) { /* ... */ }
-```
-
-### Labels
-
-The label lambda gets the **scroll offset in pixels** the drag is jumping to, not an item index. Map it to your own sections, for example the chapter or page at that offset:
-
-```kotlin
-// Where each page starts, filled in by layout (onPlaced { positionInParent() }).
-val pageTops = remember { IntArray(pageCount) }
-
-val label = remember {
-    ScrollbarLabel { offset ->
-        // Binary search: the lambda runs on almost every pixel of a drag.
-        var low = 0
-        var high = pageTops.size
-        while (low < high) {
-            val middle = (low + high) / 2
-            if (pageTops[middle] <= offset) low = middle + 1 else high = middle
-        }
-        "Page ${low.coerceAtLeast(1)}"
-    }
-}
-
-Modifier.scrollbar(scrollState, label = label)
-```
-
-With `sectionHaptics` (on by default), it ticks once per page, because ticks only fire when the text changes.
-
-### Parameters
-
-The same as the list overload, minus `hasMore` and `minItemsToShow` (there are no items or pages to load; the bar hides whenever the content fits), plus:
-
-| Parameter          | Type          | Default                | Use it when                                         |
-|--------------------|---------------|------------------------|-----------------------------------------------------|
-| `orientation`      | `Orientation` | `Orientation.Vertical` | The content scrolls horizontally.                   |
-| `reverseScrolling` | `Boolean`     | `false`                | The scroll modifier uses `reverseScrolling = true`. |
 
 ---
 
@@ -721,7 +645,9 @@ For a horizontal list, `contentPadding` uses the start and end padding. Right-to
 
 ## Mouse and desktop
 
-https://github.com/user-attachments/assets/1b232689-2cb3-418c-a6af-5ead7749faeb
+
+https://github.com/user-attachments/assets/69ffd06e-a4a5-4021-8cb5-1f8f91f021f2
+
 
 With a mouse (on desktop, or a mouse connected to Android or an iPad):
 
@@ -736,6 +662,82 @@ Touch behavior isn't affected by any of this. On desktop the default style is al
 ```kotlin
 ScrollbarDefaults.style(visibility = ScrollbarVisibility.Always)
 ```
+
+---
+
+## Plain Columns and Rows
+
+<!-- video -->
+
+For content that isn't a lazy list (articles, settings screens, terms, long forms), pass the `ScrollState` of a `Column` with `verticalScroll` or a `Row` with `horizontalScroll`:
+
+```kotlin
+val scrollState = rememberScrollState()
+
+Column(
+    Modifier
+        .fillMaxSize()
+        .scrollbar(scrollState)
+        .verticalScroll(scrollState)
+) { /* long content */ }
+```
+
+**Put `scrollbar` before `verticalScroll`**, on the same element. Placed after it, the bar sits inside the scrolled content and scrolls away with it.
+
+A scroll state knows the full size of its content, so positions are exact, unlike the estimate lazy lists need.
+
+### Horizontal and reversed
+
+The scroll state doesn't know its direction, so pass the same values the scroll modifier uses:
+
+```kotlin
+Row(
+    Modifier
+        .scrollbar(scrollState, orientation = Orientation.Horizontal)
+        .horizontalScroll(scrollState)
+) { /* ... */ }
+
+Column(
+    Modifier
+        .scrollbar(scrollState, reverseScrolling = true)
+        .verticalScroll(scrollState, reverseScrolling = true)
+) { /* ... */ }
+```
+
+### Labels
+
+The label lambda gets the **scroll offset in pixels** the drag is jumping to, not an item index. Map it to your own sections, for example the chapter or page at that offset:
+
+```kotlin
+// Where each page starts, filled in by layout (onPlaced { positionInParent() }).
+val pageTops = remember { IntArray(pageCount) }
+
+val label = remember {
+    ScrollbarLabel { offset ->
+        // Binary search: the lambda runs on almost every pixel of a drag.
+        var low = 0
+        var high = pageTops.size
+        while (low < high) {
+            val middle = (low + high) / 2
+            if (pageTops[middle] <= offset) low = middle + 1 else high = middle
+        }
+        "Page ${low.coerceAtLeast(1)}"
+    }
+}
+
+Modifier.scrollbar(scrollState, label = label)
+```
+
+With `sectionHaptics` (on by default), it ticks once per page, because ticks only fire when the text changes.
+
+### Parameters
+
+The same as the list overload, minus `hasMore` and `minItemsToShow` (there are no items or pages to load; the bar hides whenever the content fits), plus:
+
+| Parameter          | Type          | Default                | Use it when                                         |
+|--------------------|---------------|------------------------|-----------------------------------------------------|
+| `orientation`      | `Orientation` | `Orientation.Vertical` | The content scrolls horizontally.                   |
+| `reverseScrolling` | `Boolean`     | `false`                | The scroll modifier uses `reverseScrolling = true`. |
 
 ---
 

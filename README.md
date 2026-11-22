@@ -122,7 +122,6 @@ Every parameter, with when to use it, is in the [guide](GUIDE.md).
 [GUIDE.md](GUIDE.md) walks through everything you might want to do, with code and short videos:
 
 - [Add a scrollbar to any lazy list or grid](GUIDE.md#add-a-scrollbar-to-a-list-or-grid)
-- [Plain Columns and Rows](GUIDE.md#plain-columns-and-rows)
 - [Show where the user will land](GUIDE.md#show-where-the-user-will-land)
 - [Infinite feeds, chats and paging](GUIDE.md#infinite-feeds-chats-and-paging)
 - [Stay clear of system bars, padding and gestures](GUIDE.md#stay-clear-of-system-bars-padding-and-gestures)
@@ -133,6 +132,7 @@ Every parameter, with when to use it, is in the [guide](GUIDE.md).
 - [Let users move the bar](GUIDE.md#let-users-move-the-bar)
 - [Horizontal lists](GUIDE.md#horizontal-lists)
 - [Mouse and desktop](GUIDE.md#mouse-and-desktop)
+- [Plain Columns and Rows](GUIDE.md#plain-columns-and-rows)
 - [Accessibility](GUIDE.md#accessibility)
 - [API reference](GUIDE.md#api-reference)
 - [Troubleshooting](GUIDE.md#troubleshooting)
