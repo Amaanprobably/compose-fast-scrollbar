@@ -645,9 +645,7 @@ For a horizontal list, `contentPadding` uses the start and end padding. Right-to
 
 ## Mouse and desktop
 
-
-https://github.com/user-attachments/assets/69ffd06e-a4a5-4021-8cb5-1f8f91f021f2
-
+https://github.com/user-attachments/assets/74f9a4c8-0392-4a7f-b869-2a88df90c067
 
 With a mouse (on desktop, or a mouse connected to Android or an iPad):
 
@@ -667,7 +665,7 @@ ScrollbarDefaults.style(visibility = ScrollbarVisibility.Always)
 
 ## Plain Columns and Rows
 
-<!-- video -->
+https://github.com/user-attachments/assets/33f1168d-84b8-4934-adf2-299713d58d1d
 
 For content that isn't a lazy list (articles, settings screens, terms, long forms), pass the `ScrollState` of a `Column` with `verticalScroll` or a `Row` with `horizontalScroll`:
 
