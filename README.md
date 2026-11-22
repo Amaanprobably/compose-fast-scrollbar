@@ -13,7 +13,7 @@
   <a href="https://central.sonatype.com/artifact/io.github.amaanprobably/compose-fast-scrollbar"><img src="https://img.shields.io/maven-central/v/io.github.amaanprobably/compose-fast-scrollbar" alt="Maven Central"></a>
 </p>
 
-A draggable fast scrollbar for Jetpack Compose and Compose Multiplatform: LazyColumn, LazyRow and grids. One modifier, no wrapper composable, works on Android, iOS and Desktop.
+A draggable fast scrollbar for Jetpack Compose and Compose Multiplatform: LazyColumn, LazyRow, grids, and scrollable Columns and Rows. One modifier, no wrapper composable, works on Android, iOS and Desktop.
 
 > **Status:** early (0.x). The full test suite passes on Android devices, Desktop and the iOS simulator.
 
@@ -24,12 +24,12 @@ https://github.com/user-attachments/assets/8f0c4779-44e3-4107-b11b-78473a625502
 ## Features
 
 - **Drag to jump** anywhere in long lists. Touches that miss the thumb still reach the list.
-- **One modifier** for `LazyColumn`, `LazyRow` and lazy grids. No wrapper composable.
+- **One modifier** for `LazyColumn`, `LazyRow`, lazy grids and scrollable `Column`/`Row`. No wrapper composable.
 - **Steady thumb:** fixed length by default, and it glides instead of jumping when items change.
 - **Label bubble** while dragging (a letter, date or section), with a haptic tick per section.
 - **Infinite feeds and chats:** `hasMore`, reversed lists, and pages that load mid-drag.
 - **Make it yours:** colors, sizes, your own icon as the thumb, and an optional visible track.
-- **Native on each platform:** capsule on Android, thin bar on iOS, mouse-sized bar with hover and click-to-jump on desktop.
+- **Native on each platform:** capsule on Android, thin bar on iOS, and on desktop a proportional bar with hover and click-to-jump, always visible on Windows and Linux like the system's own.
 - **Edge-safe:** stays clear of Android gesture zones, and supports `contentPadding` and RTL.
 - **Zero recompositions** while scrolling or dragging.
 
@@ -38,7 +38,7 @@ https://github.com/user-attachments/assets/8f0c4779-44e3-4107-b11b-78473a625502
 ```kotlin
 // commonMain, or your app module in a plain Android project
 dependencies {
-    implementation("io.github.amaanprobably:compose-fast-scrollbar:0.1.1")
+    implementation("io.github.amaanprobably:compose-fast-scrollbar:0.2.0")
 }
 ```
 
@@ -62,6 +62,19 @@ LazyColumn(
 ```
 
 Grids work the same way with a `LazyGridState`.
+
+### Plain Columns and Rows
+
+```kotlin
+val scrollState = rememberScrollState()
+
+Column(
+    Modifier
+        .fillMaxSize()
+        .scrollbar(scrollState)       // before verticalScroll
+        .verticalScroll(scrollState)
+) { /* long content */ }
+```
 
 ### Show where you'll land
 
@@ -109,6 +122,7 @@ Every parameter, with when to use it, is in the [guide](GUIDE.md).
 [GUIDE.md](GUIDE.md) walks through everything you might want to do, with code and short videos:
 
 - [Add a scrollbar to any lazy list or grid](GUIDE.md#add-a-scrollbar-to-a-list-or-grid)
+- [Plain Columns and Rows](GUIDE.md#plain-columns-and-rows)
 - [Show where the user will land](GUIDE.md#show-where-the-user-will-land)
 - [Infinite feeds, chats and paging](GUIDE.md#infinite-feeds-chats-and-paging)
 - [Stay clear of system bars, padding and gestures](GUIDE.md#stay-clear-of-system-bars-padding-and-gestures)
@@ -123,6 +137,10 @@ Every parameter, with when to use it, is in the [guide](GUIDE.md).
 - [API reference](GUIDE.md#api-reference)
 - [Troubleshooting](GUIDE.md#troubleshooting)
 
+## Compared to Material 3's scrollbar
+
+Material 3 has a visual-only scrollbar, with an interactive one on the way. This library is a fast scroller for long content: a label bubble with haptics, infinite feeds that load mid-drag, gesture navigation handling, a movable bar and custom thumbs and tracks. It doesn't need Material 3, and it works on Android, iOS and desktop.
+
 ## Known limitations
 
 - **Best on long lists** (roughly 50+ items). On short lists with very uneven items, the estimated position can visibly shift.
@@ -133,9 +151,8 @@ Details and workarounds are in [Troubleshooting](GUIDE.md#troubleshooting).
 
 ## Roadmap
 
-- Plain `ScrollState` support (`Column` with `verticalScroll`), with exact positions
-- `LazyVerticalStaggeredGrid` support
-- TalkBack and VoiceOver actions, and keyboard support on desktop
+- `LazyVerticalStaggeredGrid` support (0.3)
+- TalkBack and VoiceOver actions, and keyboard support on desktop (0.4)
 - Fine scrub: move the finger sideways to drag the thumb slower, for precise landing (opt-in)
 - Section snapping (opt-in)
 

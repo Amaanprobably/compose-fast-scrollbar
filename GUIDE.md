@@ -7,19 +7,20 @@ New here? Start with [Add a scrollbar to a list or grid](#add-a-scrollbar-to-a-l
 ## Contents
 
 1. [Add a scrollbar to a list or grid](#add-a-scrollbar-to-a-list-or-grid)
-2. [Show where the user will land](#show-where-the-user-will-land)
-3. [Infinite feeds, chats and paging](#infinite-feeds-chats-and-paging)
-4. [Stay clear of system bars, padding and gestures](#stay-clear-of-system-bars-padding-and-gestures)
-5. [Change the look](#change-the-look)
-6. [Use your own icon as the thumb](#use-your-own-icon-as-the-thumb)
-7. [Add a visible track](#add-a-visible-track)
-8. [Different looks per platform](#different-looks-per-platform)
-9. [Let users move the bar](#let-users-move-the-bar)
-10. [Horizontal lists](#horizontal-lists)
-11. [Mouse and desktop](#mouse-and-desktop)
-12. [Accessibility](#accessibility)
-13. [API reference](#api-reference)
-14. [Troubleshooting](#troubleshooting)
+2. [Plain Columns and Rows](#plain-columns-and-rows)
+3. [Show where the user will land](#show-where-the-user-will-land)
+4. [Infinite feeds, chats and paging](#infinite-feeds-chats-and-paging)
+5. [Stay clear of system bars, padding and gestures](#stay-clear-of-system-bars-padding-and-gestures)
+6. [Change the look](#change-the-look)
+7. [Use your own icon as the thumb](#use-your-own-icon-as-the-thumb)
+8. [Add a visible track](#add-a-visible-track)
+9. [Different looks per platform](#different-looks-per-platform)
+10. [Let users move the bar](#let-users-move-the-bar)
+11. [Horizontal lists](#horizontal-lists)
+12. [Mouse and desktop](#mouse-and-desktop)
+13. [Accessibility](#accessibility)
+14. [API reference](#api-reference)
+15. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -31,7 +32,7 @@ Add the dependency to `commonMain` (or to your app module in a plain Android pro
 
 ```kotlin
 dependencies {
-    implementation("io.github.amaanprobably:compose-fast-scrollbar:0.1.1")
+    implementation("io.github.amaanprobably:compose-fast-scrollbar:0.2.0")
 }
 ```
 
@@ -76,7 +77,7 @@ A few things that are easy to get wrong:
 
 ### All parameters
 
-Both overloads take the same parameters.
+The list and grid overloads take the same parameters. The `ScrollState` overload is covered in [Plain Columns and Rows](#plain-columns-and-rows).
 
 | Parameter                 | Type                              | Default                     | Use it when                                                                                                           |
 |---------------------------|-----------------------------------|-----------------------------|-----------------------------------------------------------------------------------------------------------------------|
@@ -90,6 +91,82 @@ Both overloads take the same parameters.
 | `scrollToStartLabel`      | `String?`                         | `null`                      | You want a screen-reader action to jump to the start. See [Accessibility](#accessibility).                            |
 | `scrollToEndLabel`        | `String?`                         | `null`                      | You want a screen-reader action to jump to the end.                                                                   |
 | `onEdgeChange`            | `((ScrollbarEdge) -> Unit)?`      | `null`                      | Users should be able to move the bar. See [Let users move the bar](#let-users-move-the-bar).                          |
+
+---
+
+## Plain Columns and Rows
+
+<!-- video -->
+
+For content that isn't a lazy list (articles, settings screens, terms, long forms), pass the `ScrollState` of a `Column` with `verticalScroll` or a `Row` with `horizontalScroll`:
+
+```kotlin
+val scrollState = rememberScrollState()
+
+Column(
+    Modifier
+        .fillMaxSize()
+        .scrollbar(scrollState)
+        .verticalScroll(scrollState)
+) { /* long content */ }
+```
+
+**Put `scrollbar` before `verticalScroll`**, on the same element. Placed after it, the bar sits inside the scrolled content and scrolls away with it.
+
+A scroll state knows the full size of its content, so positions are exact, unlike the estimate lazy lists need.
+
+### Horizontal and reversed
+
+The scroll state doesn't know its direction, so pass the same values the scroll modifier uses:
+
+```kotlin
+Row(
+    Modifier
+        .scrollbar(scrollState, orientation = Orientation.Horizontal)
+        .horizontalScroll(scrollState)
+) { /* ... */ }
+
+Column(
+    Modifier
+        .scrollbar(scrollState, reverseScrolling = true)
+        .verticalScroll(scrollState, reverseScrolling = true)
+) { /* ... */ }
+```
+
+### Labels
+
+The label lambda gets the **scroll offset in pixels** the drag is jumping to, not an item index. Map it to your own sections, for example the chapter or page at that offset:
+
+```kotlin
+// Where each page starts, filled in by layout (onPlaced { positionInParent() }).
+val pageTops = remember { IntArray(pageCount) }
+
+val label = remember {
+    ScrollbarLabel { offset ->
+        // Binary search: the lambda runs on almost every pixel of a drag.
+        var low = 0
+        var high = pageTops.size
+        while (low < high) {
+            val middle = (low + high) / 2
+            if (pageTops[middle] <= offset) low = middle + 1 else high = middle
+        }
+        "Page ${low.coerceAtLeast(1)}"
+    }
+}
+
+Modifier.scrollbar(scrollState, label = label)
+```
+
+With `sectionHaptics` (on by default), it ticks once per page, because ticks only fire when the text changes.
+
+### Parameters
+
+The same as the list overload, minus `hasMore` and `minItemsToShow` (there are no items or pages to load; the bar hides whenever the content fits), plus:
+
+| Parameter          | Type          | Default                | Use it when                                         |
+|--------------------|---------------|------------------------|-----------------------------------------------------|
+| `orientation`      | `Orientation` | `Orientation.Vertical` | The content scrolls horizontally.                   |
+| `reverseScrolling` | `Boolean`     | `false`                | The scroll modifier uses `reverseScrolling = true`. |
 
 ---
 
@@ -235,6 +312,14 @@ LazyColumn(
 
 New items at the top (a new message, a refreshed feed) or pages appended at the bottom change the item count. The thumb glides to its new position instead of snapping, and stays under the user's finger mid-drag. Give your items stable `key`s so the list keeps its place when items are inserted.
 
+With keys, the list keeps its place even at the very top: items inserted above the first visible item stay out of view, and the thumb moves down to show how much is now above. That's standard `LazyColumn` behavior, not the scrollbar. To show new items instead when the user is already at the top (common in feeds), scroll there yourself:
+
+```kotlin
+LaunchedEffect(posts.size) {
+    if (listState.firstVisibleItemIndex == 0) listState.scrollToItem(0)
+}
+```
+
 ### Paging with placeholders
 
 If you use Paging with placeholders turned on, the list already knows its full size, so you don't need `hasMore`. With placeholders off, pass `hasMore = true` until the last page has loaded.
@@ -346,7 +431,7 @@ Modifier.scrollbar(listState, style = scrollbarStyle)
 ScrollbarDefaults.style(thumbAppearance = ThumbAppearance.Bar)
 ```
 
-`ScrollbarDefaults.compactStyle()` is the full desktop look: a thin bar with a mouse-sized grab area. It's hard to hit with a finger, so on touch screens prefer `style(thumbAppearance = ThumbAppearance.Bar)`, which keeps the finger-sized grab area.
+`ScrollbarDefaults.compactStyle()` is the full desktop look: a thin proportional bar with a mouse-sized grab area. It's hard to hit with a finger, so on touch screens prefer `style(thumbAppearance = ThumbAppearance.Bar)`, which keeps the finger-sized grab area.
 
 ### Sizes
 
@@ -363,12 +448,12 @@ Keep `touchTargetThickness` at 48 dp or more on touch screens. Touches in that s
 
 ### Visibility and timing
 
-| You want                                        | Set                                                     |
-|-------------------------------------------------|---------------------------------------------------------|
-| The bar to fade out after scrolling (default)   | `visibility = ScrollbarVisibility.AutoHide`             |
-| The bar to stay longer before fading            | `hideDelay = 3.seconds`                                 |
-| The bar always on screen, like a desktop app    | `visibility = ScrollbarVisibility.Always`               |
-| Faster or slower fades                          | `fadeInDuration`, `fadeOutDuration`                     |
+| You want                                                             | Set                                         |
+|----------------------------------------------------------------------|---------------------------------------------|
+| The bar to fade out after scrolling (Android, iOS and macOS default) | `visibility = ScrollbarVisibility.AutoHide` |
+| The bar to stay longer before fading                                 | `hideDelay = 3.seconds`                     |
+| The bar always on screen (Windows and Linux default)                 | `visibility = ScrollbarVisibility.Always`   |
+| Faster or slower fades                                               | `fadeInDuration`, `fadeOutDuration`         |
 
 ```kotlin
 ScrollbarDefaults.style(
@@ -380,10 +465,10 @@ Use `Always` for long reading screens, settings and desktop apps, where people l
 
 ### Thumb length
 
-| Option                          | Behavior                                                     | Use it when                                                                     |
-|---------------------------------|--------------------------------------------------------------|---------------------------------------------------------------------------------|
-| `ThumbSizing.Fixed(40.dp)`      | Constant length. The default, and it never jitters.          | Almost always, especially with uneven items.                                    |
-| `ThumbSizing.Proportional(...)` | Length follows viewport / content, like a desktop scrollbar. | Items are all the same size and you want the length to hint at the list's size. |
+| Option                          | Behavior                                                                                   | Use it when                                                                       |
+|---------------------------------|--------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------|
+| `ThumbSizing.Fixed(40.dp)`      | Constant length. The default on touch screens, and it never jitters.                       | Touch screens, especially with uneven items.                                      |
+| `ThumbSizing.Proportional(...)` | Length follows viewport / content. The default on desktop, smoothed, with a 24 dp minimum. | Desktop, or same-size items where you want the length to hint at the list's size. |
 
 ```kotlin
 ScrollbarDefaults.style(
@@ -534,19 +619,20 @@ ScrollbarDefaults.style(
 
 https://github.com/user-attachments/assets/e29dc856-bf78-4d82-8a1c-1a4b3736a9f9
 
-By default the scrollbar already follows each platform:
+By default, the scrollbar already follows each platform:
 
-| Value                   | Android         | iOS           | Desktop (and `compactStyle`) |
-|-------------------------|-----------------|---------------|------------------------------|
-| Look                    | `Capsule`       | `Bar`         | `Bar`                        |
-| `thumbThickness`        | 5 dp            | 3 dp          | 8 dp                         |
-| `pressedThumbThickness` | 8 dp            | 8 dp          | 12 dp                        |
-| Thumb length            | 40 dp           | 40 dp         | 40 dp                        |
-| `touchTargetThickness`  | 48 dp           | 48 dp         | 16 dp                        |
-| `trackPadding`          | 8 dp            | 6 dp          | 4 dp                         |
-| `edgePadding`           | 4 dp            | 3 dp          | 2 dp                         |
-| `capsuleThickness`      | 24 dp           | 24 dp         | 16 dp                        |
-| `capsuleExtraLength`    | 24 dp           | 24 dp         | 8 dp                         |
+| Value                   | Android    | iOS        | Desktop (and `compactStyle`)                  |
+|-------------------------|------------|------------|-----------------------------------------------|
+| Look                    | `Capsule`  | `Bar`      | `Bar`                                         |
+| `thumbThickness`        | 5 dp       | 3 dp       | 8 dp                                          |
+| `pressedThumbThickness` | 8 dp       | 8 dp       | 12 dp                                         |
+| Thumb length            | 40 dp      | 40 dp      | Proportional, min 24 dp                       |
+| Visibility              | `AutoHide` | `AutoHide` | `Always` (Windows, Linux), `AutoHide` (macOS) |
+| `touchTargetThickness`  | 48 dp      | 48 dp      | 16 dp                                         |
+| `trackPadding`          | 8 dp       | 6 dp       | 4 dp                                          |
+| `edgePadding`           | 4 dp       | 3 dp       | 2 dp                                          |
+| `capsuleThickness`      | 24 dp      | 24 dp      | 16 dp                                         |
+| `capsuleExtraLength`    | 24 dp      | 24 dp      | 8 dp                                          |
 
 To give each platform its own style from shared code, without `expect`/`actual` or platform checks, use `platformStyle`. Each argument is a full style, so anything can differ. Pass only the platforms you want to change:
 
@@ -560,7 +646,7 @@ val scrollbarStyle = ScrollbarDefaults.platformStyle(
         thumbAppearance = ThumbAppearance.Icon(idle = logoPainter, size = DpSize(32.dp, 32.dp)),
     ),
     desktop = ScrollbarDefaults.compactStyle(
-        thumbSizing = ThumbSizing.Proportional(),
+        thumbSizing = ThumbSizing.Fixed(),
         hideDelay = 3.seconds,
     ),
 )
@@ -645,13 +731,10 @@ With a mouse (on desktop, or a mouse connected to Android or an iPad):
 - Dragging works as with a finger.
 - Mouse wheel and trackpad scrolling always reach the list.
 
-Touch behavior isn't affected by any of this. On desktop the default style is already the compact, mouse-sized bar. For a desktop app where people expect a permanent scrollbar:
+Touch behavior isn't affected by any of this. On desktop the default style is already the compact, mouse-sized bar: proportional, and always visible on Windows and Linux like the system's own scrollbars. To keep it visible on macOS too:
 
 ```kotlin
-ScrollbarDefaults.compactStyle(
-    visibility = ScrollbarVisibility.Always,
-    thumbSizing = ThumbSizing.Proportional(),
-)
+ScrollbarDefaults.style(visibility = ScrollbarVisibility.Always)
 ```
 
 ---
@@ -693,7 +776,7 @@ All parameters of `style(...)` and `compactStyle(...)`. "Platform" means the val
 | Parameter               | Type                  | Default                    | Description                                                                                       |
 |-------------------------|-----------------------|----------------------------|---------------------------------------------------------------------------------------------------|
 | `thumbAppearance`       | `ThumbAppearance`     | platform                   | `Capsule`, `Bar` or `Icon(...)`.                                                                  |
-| `thumbSizing`           | `ThumbSizing`         | `Fixed(40.dp)`             | `Fixed(length)` or `Proportional(...)`.                                                           |
+| `thumbSizing`           | `ThumbSizing`         | platform                   | `Fixed(length)` or `Proportional(...)`.                                                           |
 | `thumbThickness`        | `Dp`                  | platform                   | Thumb width (height for horizontal bars) at rest.                                                 |
 | `pressedThumbThickness` | `Dp`                  | platform                   | Thumb width while held. The bar look widens to it, and halfway to it on mouse hover.              |
 | `touchTargetThickness`  | `Dp`                  | platform                   | Width of the grab strip along the edge. Touches in it that miss the thumb still reach the list.   |
@@ -701,7 +784,7 @@ All parameters of `style(...)` and `compactStyle(...)`. "Platform" means the val
 | `edgePadding`           | `Dp`                  | platform                   | Space between the bar and the list's edge.                                                        |
 | `capsuleThickness`      | `Dp`                  | platform                   | Width of the capsule around the thumb (`Capsule` look only).                                      |
 | `capsuleExtraLength`    | `Dp`                  | platform                   | How much longer the capsule is than the thumb, split between both ends (`Capsule` look only).     |
-| `visibility`            | `ScrollbarVisibility` | `AutoHide`                 | `AutoHide` (fades out after scrolling stops) or `Always`.                                         |
+| `visibility`            | `ScrollbarVisibility` | platform                   | `AutoHide` (fades out after scrolling stops) or `Always`.                                         |
 | `hideDelay`             | `Duration`            | `1.5.seconds`              | How long the bar stays after scrolling stops (`AutoHide` only).                                   |
 | `fadeInDuration`        | `Duration`            | `150.milliseconds`         | Fade-in time.                                                                                     |
 | `fadeOutDuration`       | `Duration`            | `300.milliseconds`         | Fade-out time.                                                                                    |
@@ -722,10 +805,10 @@ All parameters of `style(...)` and `compactStyle(...)`. "Platform" means the val
 
 ### `ThumbSizing`
 
-| Option                                                                       | Description                                                                                                                                             |
-|------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `Fixed(length = 40.dp)`                                                      | Constant length. The default, and it never jitters.                                                                                                     |
-| `Proportional(minLength = 48.dp, maxLengthFraction = 0.9f, smoothed = true)` | Length follows viewport / content, between `minLength` and `maxLengthFraction` of the track. `smoothed` animates changes in the estimated content size. |
+| Option                                                                       | Description                                                                                                                                                                                           |
+|------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `Fixed(length = 40.dp)`                                                      | Constant length. The default on touch screens, and it never jitters.                                                                                                                                  |
+| `Proportional(minLength = 48.dp, maxLengthFraction = 0.9f, smoothed = true)` | Length follows viewport / content, between `minLength` and `maxLengthFraction` of the track. `smoothed` animates changes in the estimated content size. The desktop default uses `minLength = 24.dp`. |
 
 ### `TrackAppearance`
 
@@ -778,6 +861,9 @@ ScrollbarLabel(sectionHaptics = true, style = ScrollbarLabelStyle()) { itemIndex
 
 **The bar doesn't show.**
 It only shows when the list can scroll and has at least `minItemsToShow` items (10 by default). With `AutoHide`, it also stays hidden until the list is scrolled. Check that the modifier is on the lazy layout itself, and that you passed the same state object the layout uses.
+
+**The bar scrolls away with my Column.**
+`scrollbar` is chained after `verticalScroll`, so it's inside the scrolled content. Move it before: `.scrollbar(scrollState).verticalScroll(scrollState)`.
 
 **The list lands a little off the thumb.**
 Lazy lists only know the size of items they've measured, so dragging maps the thumb to an item using the average item size. With uniform items it's exact. With very different item sizes the list can land slightly off. Grids estimate items per line from the visible items, so grids with full-span headers or uneven spans can be off too.
