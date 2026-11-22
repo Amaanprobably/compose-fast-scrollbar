@@ -1970,6 +1970,22 @@ private fun Modifier.scrollbarFor(
 
                 var lastKey = Long.MIN_VALUE
 
+                // The bubble follows the list's target item. Called after every scroll request, from
+                // the move loop and from a rebase while the finger is held still.
+                fun updateLabel() {
+                    if (labelConfig == null) return
+                    val labelIndex = keyIndex(lastKey)
+                    if (labelIndex == lastLabelIndex) return
+                    lastLabelIndex = labelIndex
+                    val newText = labelConfig.provider(labelIndex)
+                    if (newText != controller.label) {
+                        if (labelConfig.sectionHaptics && newText != null && !isMouse) {
+                            haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                        }
+                        controller.label = newText
+                    }
+                }
+
                 // Track click: jump right away, before the mouse moves.
                 if (!onThumb) {
                     lastKey = target.scrollToProgress(
@@ -2005,10 +2021,12 @@ private fun Modifier.scrollbarFor(
                         anchorVisual >= endCap - HELD_AT_END_TOLERANCE -> {
                             anchorList = endCap
                             lastKey = target.scrollToProgress(metrics, 1f, lastKey)
+                            updateLabel()
                         }
                         anchorVisual <= HELD_AT_END_TOLERANCE -> {
                             anchorList = 0f
                             lastKey = target.scrollToProgress(metrics, 0f, lastKey)
+                            updateLabel()
                         }
                         else -> anchorList = metrics.progress * endCap
                     }
@@ -2100,19 +2118,7 @@ private fun Modifier.scrollbarFor(
                         (listProgressFor(controller.dragProgress) / endCap).coerceIn(0f, 1f),
                         lastKey,
                     )
-                    if (labelConfig != null) {
-                        val labelIndex = keyIndex(lastKey)
-                        if (labelIndex != lastLabelIndex) {
-                            lastLabelIndex = labelIndex
-                            val newText = labelConfig.provider(labelIndex)
-                            if (newText != controller.label) {
-                                if (labelConfig.sectionHaptics && newText != null && !isMouse) {
-                                    haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
-                                }
-                                controller.label = newText
-                            }
-                        }
-                    }
+                    updateLabel()
                     change.consume()
                 }
             } finally {

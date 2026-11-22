@@ -479,6 +479,41 @@ class ScrollbarUiTest {
     }
 
     @Test
+    fun theLabelFollowsPagesLoadedWhileHoldingTheEnd() = runComposeUiTest {
+        lateinit var state: LazyListState
+        var itemCount by mutableStateOf(100)
+        var lastLabelIndex = -1
+        val label = ScrollbarLabel(sectionHaptics = false) { index -> lastLabelIndex = index; "#$index" }
+        setContent {
+            state = rememberLazyListState()
+            LazyColumn(
+                state = state,
+                modifier = Modifier
+                    .windowInsetsPadding(WindowInsets.safeDrawing.union(WindowInsets.mandatorySystemGestures))
+                    .size(300.dp, 600.dp)
+                    .testTag(LIST_TAG)
+                    .scrollbar(state, hasMore = true, style = uiTestStyle, label = label),
+            ) {
+                items(itemCount) { Box(Modifier.fillMaxWidth().height(50.dp)) }
+            }
+        }
+        val list = onNodeWithTag(LIST_TAG)
+        list.performTouchInput {
+            val start = thumbAtTop()
+            down(start)
+            moveInSteps(start, Offset(right - 10f, bottom))
+        }
+        waitForIdle()
+
+        // A page loads while the finger is held perfectly still at the end.
+        itemCount = 200
+        waitForIdle()
+
+        assertEquals(199, lastLabelIndex, "the bubble should follow the list into the new page")
+        list.performTouchInput { up() }
+    }
+
+    @Test
     fun afterAMidDragPageLoadTheEndIsReachableWithoutLeavingTheList() = runComposeUiTest {
         lateinit var state: LazyListState
         var itemCount by mutableStateOf(100)
