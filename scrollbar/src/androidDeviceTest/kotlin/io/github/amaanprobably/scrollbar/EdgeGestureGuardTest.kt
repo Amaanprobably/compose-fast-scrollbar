@@ -155,8 +155,10 @@ class EdgeGestureGuardTest {
         lateinit var view: View
         setContent {
             view = LocalView.current
-            FullScreenList(ScrollbarVisibility.AutoHide) // hidden until the list scrolls
+            FullScreenList(ScrollbarVisibility.AutoHide)
         }
+        waitForIdle()
+        mainClock.advanceTimeBy(2_500) // past the bar's first show: hidden until the list scrolls
         waitForIdle()
         assertTrue(view.systemGestureExclusionRects.isEmpty(), "a hidden bar must not block the back gesture")
     }

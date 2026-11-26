@@ -81,9 +81,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.selects.select
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.ceil
@@ -152,8 +154,9 @@ public sealed interface ThumbAppearance {
     /**
      * A single rounded bar with no capsule, like desktop scrollbars. The default on desktop, and
      * available everywhere. It uses the style's thumb thickness, color and [ThumbSizing]
-     * parameters; the capsule parameters are ignored. It widens from [ScrollbarStyle.thumbThickness]
-     * to [ScrollbarStyle.pressedThumbThickness] when hovered or dragged.
+     * parameters; the capsule parameters are ignored. It widens inward from
+     * [ScrollbarStyle.thumbThickness] to [ScrollbarStyle.pressedThumbThickness] when hovered or
+     * dragged, keeping its outer edge in place.
      */
     public data object Bar : ThumbAppearance
 
@@ -292,7 +295,10 @@ public sealed interface TrackAppearance {
  * has at least `minItemsToShow` items.
  */
 public enum class ScrollbarVisibility {
-    /** Fades in while scrolling or dragging and fades out after [ScrollbarStyle.hideDelay]. */
+    /**
+     * Fades in while scrolling or dragging and fades out after [ScrollbarStyle.hideDelay] (four
+     * fifths of it after a drag). Also shows once when the list first has something to scroll.
+     */
     AutoHide,
 
     /** Always visible, so users can see where they are and grab the thumb at any time. */
@@ -387,9 +393,17 @@ internal class StyleDefaults(
     val touchTargetThickness: Dp,
     val trackPadding: Dp,
     val edgePadding: Dp,
+    /** [edgePadding] for [ThumbAppearance.Bar], which sits closer to the edge than a capsule. */
+    val barEdgePadding: Dp,
     val capsuleThickness: Dp,
     val capsuleExtraLength: Dp,
-)
+) {
+    /** The edge padding [ScrollbarDefaults.style] uses for [appearance]. */
+    fun edgePaddingFor(appearance: ThumbAppearance): Dp = when (appearance) {
+        ThumbAppearance.Bar -> barEdgePadding
+        else -> edgePadding
+    }
+}
 
 /**
  * Android: a capsule with a thumb inside, like the platform fast scroller. The capsule is 24dp
@@ -405,6 +419,7 @@ internal val AndroidDefaults = StyleDefaults(
     touchTargetThickness = 48.dp,
     trackPadding = 8.dp,
     edgePadding = 4.dp,
+    barEdgePadding = 0.dp, // flush, like Android's own scrollbars and RecyclerView's fast scroller
     capsuleThickness = 24.dp,
     capsuleExtraLength = 24.dp,
 )
@@ -422,6 +437,7 @@ internal val IosDefaults = StyleDefaults(
     touchTargetThickness = 48.dp,
     trackPadding = 6.dp,
     edgePadding = 3.dp,
+    barEdgePadding = 3.dp,
     capsuleThickness = 24.dp, // unused by Bar, same as Android for apps that switch to Capsule
     capsuleExtraLength = 24.dp,
 )
@@ -440,6 +456,7 @@ internal val CompactDefaults = StyleDefaults(
     touchTargetThickness = 16.dp,
     trackPadding = 4.dp,
     edgePadding = 2.dp,
+    barEdgePadding = 2.dp, // like macOS; Windows 11 is 3px
     capsuleThickness = 16.dp,
     capsuleExtraLength = 8.dp,
 )
@@ -463,6 +480,10 @@ public object ScrollbarDefaults {
      * and Linux, [ScrollbarVisibility.AutoHide] on Android, iOS and macOS. On desktop the thumb is
      * [ThumbSizing.Proportional], like system scrollbars; on touch screens it's a fixed 40dp handle.
      *
+     * The default `edgePadding` follows the look: a [ThumbAppearance.Bar] on Android sits flush
+     * against the edge, like Android's own scrollbars, while the capsule keeps 4dp so it reads as
+     * a floating handle.
+     *
      * It is a plain function, so it can be hoisted into a top-level `val` and shared.
      */
     public fun style(
@@ -473,7 +494,7 @@ public object ScrollbarDefaults {
         visibility: ScrollbarVisibility = platformDefaultVisibility,
         touchTargetThickness: Dp = PlatformDefaults.touchTargetThickness,
         trackPadding: Dp = PlatformDefaults.trackPadding,
-        edgePadding: Dp = PlatformDefaults.edgePadding,
+        edgePadding: Dp = PlatformDefaults.edgePaddingFor(thumbAppearance),
         capsuleThickness: Dp = PlatformDefaults.capsuleThickness,
         capsuleExtraLength: Dp = PlatformDefaults.capsuleExtraLength,
         hideDelay: Duration = 1_500.milliseconds,
@@ -901,6 +922,24 @@ internal class ScrollMetrics {
         )
         progress = target.state.pinnedProgress(offset, maxScroll)
         return true
+    }
+}
+
+/**
+ * Waits up to [timeout] for the next event: true if one came, false on a timeout or once closed.
+ *
+ * Not withTimeoutOrNull: its timer runs through the dispatcher's invokeOnTimeout, which Compose's
+ * desktop and iOS dispatcher leaves to a wall clock, so a test's virtual clock never fires it.
+ * delay() follows the dispatcher everywhere, in apps and tests alike.
+ */
+private suspend fun Channel<Unit>.receiveWithin(timeout: Duration): Boolean = coroutineScope {
+    val timer = launch { delay(timeout) }
+    select {
+        onReceiveCatching { result ->
+            timer.cancel()
+            result.isSuccess
+        }
+        timer.onJoin { false }
     }
 }
 
@@ -1398,19 +1437,35 @@ private class ScrollbarController(
     private var lastScrollPosition = Long.MIN_VALUE
     private var appliedVisibility = ScrollbarVisibility.AutoHide
 
+    /** The position after a drag is the drag's own doing, so it becomes the new baseline. */
+    private var rebaseScrollPosition = false
+
+    /** A thumb that was just let go hides a bit sooner: the user is done with it. */
+    private var hideSoonAfterDrag = false
+
     /**
      * Called by the draw phase with the scroll position it just read (first visible item and its
      * offset, packed into one Long). Signals activity only on real movement, so no separate
-     * watcher is needed: the draw phase already re-runs on every scroll.
+     * watcher is needed: the draw phase already re-runs on every scroll. The draw phase only
+     * calls this when there is something to scroll.
      */
     fun onScrollPositionDrawn(position: Long) {
         when {
             lastScrollPosition == Long.MIN_VALUE -> {
-                lastScrollPosition = position // baseline: don't show just because we attached
+                // The first time there is something to scroll: show the bar once, so people can
+                // see the list goes on, like Android's views and iOS's scroll indicators do.
+                lastScrollPosition = position
+                signalActivity()
+            }
+
+            rebaseScrollPosition -> {
+                rebaseScrollPosition = false
+                lastScrollPosition = position
             }
 
             position != lastScrollPosition -> {
                 lastScrollPosition = position
+                hideSoonAfterDrag = false
                 signalActivity()
             }
         }
@@ -1435,10 +1490,9 @@ private class ScrollbarController(
                     events.receiveCatching().getOrNull() ?: return@launch
                     continue
                 }
-                val next = withTimeoutOrNull(style.hideDelay) {
-                    events.receiveCatching().getOrNull()
-                }
-                if (next == null) break
+                // 1.2 s instead of 1.5 s after a drag, like RecyclerView's fast scroller.
+                val delay = if (hideSoonAfterDrag) style.hideDelay * 4 / 5 else style.hideDelay
+                if (!events.receiveWithin(delay)) break
             }
             if (!heldVisible) {
                 fade.animateTo(0f, tween(style.fadeOutDuration.inWholeMilliseconds.toInt()))
@@ -1447,8 +1501,8 @@ private class ScrollbarController(
     }
 
     /**
-     * Called when the visibility mode changes. The initial auto-hide value does nothing, so the
-     * bar doesn't flash when it first appears.
+     * Called when the visibility mode changes. The initial auto-hide value does nothing here: the
+     * bar shows once when the list first has something to scroll, see [onScrollPositionDrawn].
      */
     fun applyVisibility(visibility: ScrollbarVisibility) {
         if (visibility == appliedVisibility) return
@@ -1587,6 +1641,8 @@ private class ScrollbarController(
             settle.animateTo(0f, tween(150))
         }
         dragging = false // before signaling, so the fade job sees the drag has ended
+        rebaseScrollPosition = true
+        hideSoonAfterDrag = true
         signalActivity()
     }
 
@@ -2863,7 +2919,20 @@ private fun DrawScope.drawMoveHint(
     line(endTip, pointOf(isVertical, mainCenter + head, crossCenter + halfArrow - head))
 }
 
-/** A single rounded bar, centered in its slot so it widens in place. */
+/**
+ * Where a bar of [thickness] starts across the scroll axis inside its slot: on the slot's side
+ * nearer the list's edge, so the bar widens inward and its outer edge stays put.
+ */
+internal fun barCrossStart(slotCrossStart: Float, slotThickness: Float, thickness: Float, crossLength: Float): Float {
+    val nearOrigin = slotCrossStart + slotThickness / 2f < crossLength / 2f
+    return if (nearOrigin) slotCrossStart else slotCrossStart + slotThickness - thickness
+}
+
+/**
+ * A single rounded bar. Its slot is as wide as the pressed bar, and the bar keeps to the slot's
+ * outer side, nearer the list's edge, so it widens inward and its distance from the edge is just
+ * the edge padding, like macOS and Windows scrollbars.
+ */
 private fun DrawScope.drawBar(
     isVertical: Boolean,
     geometry: ThumbGeometry,
@@ -2873,7 +2942,12 @@ private fun DrawScope.drawBar(
     slotCrossStart: Float,
     slotThickness: Float,
 ) {
-    val crossStart = slotCrossStart + (slotThickness - thickness) / 2f
+    val crossStart = barCrossStart(
+        slotCrossStart = slotCrossStart,
+        slotThickness = slotThickness,
+        thickness = thickness,
+        crossLength = if (isVertical) size.width else size.height,
+    )
     drawRoundRect(
         color = color,
         topLeft = pointOf(isVertical, geometry.start, crossStart),

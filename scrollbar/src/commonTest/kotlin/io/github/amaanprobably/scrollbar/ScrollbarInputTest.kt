@@ -300,6 +300,17 @@ class ThumbPlacementTest {
         assertEquals(364f, restingCrossStart(config(ScrollbarEdge.End), true, 400f, 32f))
         assertEquals(4f, restingCrossStart(config(ScrollbarEdge.Start), true, 400f, 32f))
     }
+
+    @Test
+    fun aBarKeepsItsOuterEdgeAndWidensInward() {
+        // An 8 px slot flush against the right edge of a 400 px list: the bar ends at 400 whether
+        // it's 5 px at rest or 8 px when grabbed.
+        assertEquals(395f, barCrossStart(slotCrossStart = 392f, slotThickness = 8f, thickness = 5f, crossLength = 400f))
+        assertEquals(392f, barCrossStart(slotCrossStart = 392f, slotThickness = 8f, thickness = 8f, crossLength = 400f))
+        // On the left edge it starts at the slot's start instead.
+        assertEquals(0f, barCrossStart(slotCrossStart = 0f, slotThickness = 8f, thickness = 5f, crossLength = 400f))
+        assertEquals(0f, barCrossStart(slotCrossStart = 0f, slotThickness = 8f, thickness = 8f, crossLength = 400f))
+    }
 }
 
 class MoveHintPlacementTest {
@@ -360,6 +371,22 @@ class StyleDefaultsTest {
         assertEquals(ThumbAppearance.Bar, IosDefaults.thumbAppearance)
         assertTrue(IosDefaults.thumbThickness < IosDefaults.pressedThumbThickness)
         assertEquals(48.dp, IosDefaults.touchTargetThickness, "a finger-sized grab area")
+    }
+
+    @Test
+    fun edgePaddingFollowsTheLook() {
+        // A thin bar sits flush on Android, like the system's own scrollbars. The capsule floats.
+        assertEquals(0.dp, AndroidDefaults.edgePaddingFor(ThumbAppearance.Bar))
+        assertEquals(4.dp, AndroidDefaults.edgePaddingFor(ThumbAppearance.Capsule))
+        assertEquals(3.dp, IosDefaults.edgePaddingFor(ThumbAppearance.Bar))
+        assertEquals(2.dp, CompactDefaults.edgePaddingFor(ThumbAppearance.Bar))
+
+        val bar = ScrollbarDefaults.style(thumbAppearance = ThumbAppearance.Bar)
+        assertEquals(PlatformDefaults.edgePaddingFor(ThumbAppearance.Bar), bar.edgePadding)
+        val capsule = ScrollbarDefaults.style(thumbAppearance = ThumbAppearance.Capsule)
+        assertEquals(PlatformDefaults.edgePaddingFor(ThumbAppearance.Capsule), capsule.edgePadding)
+        // An explicit value still wins.
+        assertEquals(6.dp, ScrollbarDefaults.style(thumbAppearance = ThumbAppearance.Bar, edgePadding = 6.dp).edgePadding)
     }
 
     @Test

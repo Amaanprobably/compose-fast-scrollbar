@@ -429,6 +429,7 @@ class ScrollbarTouchTest {
         }
         waitForIdle()
         mainClock.autoAdvance = false
+        mainClock.advanceTimeBy(2_500) // past the bar's first show, so it's hidden
         // Scrolling one row wakes the bar: it fades in for 150 ms, stays 1.5 s, then fades out
         // over 300 ms, so without a finger it would be gone about 2 s from now.
         runOnUiThread { state.requestScrollToItem(1) }

@@ -260,6 +260,7 @@ class ScrollbarUiTest {
             TestList(state, itemCount = 10_000, style = uiTestAutoHideStyle)
         }
         waitForIdle()
+        mainClock.advanceTimeBy(2_500) // past the bar's first show, so it's hidden
         val list = onNodeWithTag(LIST_TAG)
         // A normal swipe in the middle scrolls the list a little, which must reveal the bar.
         list.performTouchInput {
@@ -284,6 +285,7 @@ class ScrollbarUiTest {
             TestList(state, itemCount = 10_000, style = uiTestAutoHideStyle)
         }
         waitForIdle()
+        mainClock.advanceTimeBy(2_500) // past the bar's first show, so it's hidden
         onNodeWithTag(LIST_TAG).performTouchInput {
             drag(thumbAtTop(), Offset(right - 10f, bottom * 2))
         }

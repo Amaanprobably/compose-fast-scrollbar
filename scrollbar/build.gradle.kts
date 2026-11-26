@@ -128,5 +128,6 @@ tasks.withType<Test>().matching { it.name == "testAndroidHostTest" }.configureEa
         excludeTestsMatching("io.github.amaanprobably.scrollbar.ScrollbarUiTest")
         excludeTestsMatching("io.github.amaanprobably.scrollbar.ScrollbarScrollStateTest")
         excludeTestsMatching("io.github.amaanprobably.scrollbar.ScrollbarTouchTest")
+        excludeTestsMatching("io.github.amaanprobably.scrollbar.ScrollbarVisibilityTest")
     }
 }
