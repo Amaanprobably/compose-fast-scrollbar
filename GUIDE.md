@@ -555,7 +555,7 @@ By default, the scrollbar already follows each platform:
 | Thumb length            | 40 dp                  | 40 dp      | Proportional, min 24 dp                       |
 | Visibility              | `AutoHide`             | `AutoHide` | `Always` (Windows, Linux), `AutoHide` (macOS) |
 | `touchTargetThickness`  | 48 dp                  | 48 dp      | 16 dp                                         |
-| `trackPadding`          | 0 dp                   | 3 dp       | 2 dp                                          |
+| `trackPadding`          | 2 dp                   | 3 dp       | 2 dp                                          |
 | `edgePadding`           | 4 dp                   | 3 dp       | 2 dp                                          |
 | `capsuleThickness`      | 24 dp                  | 24 dp      | 16 dp                                         |
 | `capsuleExtraLength`    | 16 dp                  | 16 dp      | 8 dp                                          |

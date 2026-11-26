@@ -409,7 +409,7 @@ internal val AndroidDefaults = StyleDefaults(
     thumbLength = 40.dp,
     thumbSizing = ThumbSizing.Fixed(40.dp),
     touchTargetThickness = 48.dp,
-    trackPadding = 0.dp, // the bar reaches the ends, like Android's own scrollbars
+    trackPadding = 2.dp, // close to the ends, like Android's own scrollbars, without touching them
     edgePadding = 4.dp,
     capsuleThickness = 24.dp,
     capsuleExtraLength = 16.dp,
@@ -469,9 +469,9 @@ public object ScrollbarDefaults {
      * and Linux, [ScrollbarVisibility.AutoHide] on Android, iOS and macOS. On desktop the thumb is
      * [ThumbSizing.Proportional], like system scrollbars; on touch screens it's a fixed 40dp handle.
      *
-     * The default `trackPadding` follows the system's own scrollbars at the ends of the track:
-     * none on Android, 3dp on iOS, 2dp on desktop. The capsule and an icon keep at least their
-     * `edgePadding` at the ends, the same gap as at the side.
+     * The default `trackPadding` keeps the bar close to the ends of the track, like the system's
+     * own scrollbars: 2dp on Android and desktop, 3dp on iOS. The capsule and an icon keep at
+     * least their `edgePadding` at the ends, the same gap as at the side.
      *
      * It is a plain function, so it can be hoisted into a top-level `val` and shared.
      */

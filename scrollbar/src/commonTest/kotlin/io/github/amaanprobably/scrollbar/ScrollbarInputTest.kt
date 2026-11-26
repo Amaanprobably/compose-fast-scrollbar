@@ -301,8 +301,8 @@ class ThumbEndPaddingTest {
 
     @Test
     fun aDefaultBarReachesTheEndsLikeTheSystemScrollbars() {
-        // Android's own scrollbars reach the ends, iOS keeps 3pt and macOS 2px.
-        assertEquals(0.dp, AndroidDefaults.trackPadding)
+        // Close to the ends without touching them: iOS keeps 3pt and macOS 2px.
+        assertEquals(2.dp, AndroidDefaults.trackPadding)
         assertEquals(3.dp, IosDefaults.trackPadding)
         assertEquals(2.dp, CompactDefaults.trackPadding)
     }
