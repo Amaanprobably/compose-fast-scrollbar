@@ -5,6 +5,12 @@ All notable changes to this project are documented here. The project follows
 
 ## 0.2.1
 
+### Changed
+- An auto-hiding bar shows once when the list first has something to scroll, then fades after the usual delay, so people can see the list goes on. Android's own views and iOS's scroll indicators do the same.
+- After a drag the bar fades a little sooner: 1.2 s instead of 1.5 s with the default `hideDelay` (four fifths of it), like RecyclerView's fast scroller. Scrolling still keeps it 1.5 s.
+- The `Bar` look widens inward when grabbed or hovered, keeping its outer edge in place like macOS and Windows scrollbars. It used to widen from its center, which left an extra gap between the bar and the edge (1.5dp on Android, 2.5dp on iOS, 2dp on desktop).
+- `style(thumbAppearance = ThumbAppearance.Bar)` on Android sits flush against the edge (`edgePadding` 0dp), like Android's own scrollbars and RecyclerView's fast scroller. The capsule keeps 4dp. Pass `edgePadding` to keep the old spacing.
+
 ### Fixed
 - Taps on the thumb reach the item underneath (a checkbox, a button, the row itself). The thumb only grabs when a finger drags it or holds still on it for a moment (300 ms with Android's default touch-and-hold delay, longer if it's set slower). A drag goes on from where it was grabbed, so the list doesn't jump. While the list is scrolling, a touch on the thumb still grabs it right away, and a mouse still grabs on press.
 - A touch the system cancels while the bar is picked up (the notification shade, a parent that takes the touch) puts the bar back instead of moving it to the side it was carried to.

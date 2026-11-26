@@ -348,7 +348,7 @@ Modifier.scrollbar(listState, style = scrollbarStyle)
 | Look                        | What it is                                                       | Use it when                                                                                    |
 |-----------------------------|------------------------------------------------------------------|------------------------------------------------------------------------------------------------|
 | `ThumbAppearance.Capsule`   | A translucent capsule with a thin thumb inside. Android default. | You want the classic touch fast-scroller look.                                                 |
-| `ThumbAppearance.Bar`       | One rounded bar that widens when held. iOS and desktop default.  | You want something minimal, or a native iOS feel on Android.                                   |
+| `ThumbAppearance.Bar`       | One rounded bar that widens inward when held. iOS and desktop default. On Android it sits flush against the edge, like the system's scrollbars. | You want something minimal, or a native iOS feel on Android.                                   |
 | `ThumbAppearance.Icon(...)` | Your own icon.                                                   | You want a branded or playful thumb. See [Use your own icon](#use-your-own-icon-as-the-thumb). |
 
 ```kotlin
@@ -384,6 +384,8 @@ ScrollbarDefaults.style(
     visibility = ScrollbarVisibility.Always,
 )
 ```
+
+With `AutoHide`, the bar also shows once when the list first has something to scroll, so people can see there's more, then fades like after a scroll. After a drag it fades a little sooner: 1.2 s instead of 1.5 s with the default `hideDelay` (four fifths of whatever you set).
 
 Use `Always` for long reading screens, settings and desktop apps, where people like seeing where they are. Keep `AutoHide` for feeds and galleries, where the bar would cover content.
 
@@ -554,7 +556,7 @@ By default, the scrollbar already follows each platform:
 | Visibility              | `AutoHide` | `AutoHide` | `Always` (Windows, Linux), `AutoHide` (macOS) |
 | `touchTargetThickness`  | 48 dp      | 48 dp      | 16 dp                                         |
 | `trackPadding`          | 8 dp       | 6 dp       | 4 dp                                          |
-| `edgePadding`           | 4 dp       | 3 dp       | 2 dp                                          |
+| `edgePadding`           | 4 dp (0 dp with `Bar`) | 3 dp | 2 dp                                  |
 | `capsuleThickness`      | 24 dp      | 24 dp      | 16 dp                                         |
 | `capsuleExtraLength`    | 24 dp      | 24 dp      | 8 dp                                          |
 
@@ -781,11 +783,11 @@ All parameters of `style(...)` and `compactStyle(...)`. "Platform" means the val
 | `pressedThumbThickness` | `Dp`                  | platform                   | Thumb width while held. The bar look widens to it, and halfway to it on mouse hover.              |
 | `touchTargetThickness`  | `Dp`                  | platform                   | Width of the grab strip along the edge. Touches in it that miss the thumb still reach the list.   |
 | `trackPadding`          | `Dp`                  | platform                   | Space kept free at both ends of the track, along the scroll axis.                                 |
-| `edgePadding`           | `Dp`                  | platform                   | Space between the bar and the list's edge.                                                        |
+| `edgePadding`           | `Dp`                  | platform and look          | Space between the bar and the list's edge. 0 dp for `Bar` on Android.                            |
 | `capsuleThickness`      | `Dp`                  | platform                   | Width of the capsule around the thumb (`Capsule` look only).                                      |
 | `capsuleExtraLength`    | `Dp`                  | platform                   | How much longer the capsule is than the thumb, split between both ends (`Capsule` look only).     |
 | `visibility`            | `ScrollbarVisibility` | platform                   | `AutoHide` (fades out after scrolling stops) or `Always`.                                         |
-| `hideDelay`             | `Duration`            | `1.5.seconds`              | How long the bar stays after scrolling stops (`AutoHide` only).                                   |
+| `hideDelay`             | `Duration`            | `1.5.seconds`              | How long the bar stays after scrolling stops (`AutoHide` only). Four fifths of it after a drag.   |
 | `fadeInDuration`        | `Duration`            | `150.milliseconds`         | Fade-in time.                                                                                     |
 | `fadeOutDuration`       | `Duration`            | `300.milliseconds`         | Fade-out time.                                                                                    |
 | `thumbColor`            | `Color`               | `Color(0x80808080)`        | Thumb color at rest.                                                                              |
@@ -860,7 +862,7 @@ ScrollbarLabel(sectionHaptics = true, style = ScrollbarLabelStyle()) { itemIndex
 ## Troubleshooting
 
 **The bar doesn't show.**
-It only shows when the list can scroll and has at least `minItemsToShow` items (10 by default). With `AutoHide`, it also stays hidden until the list is scrolled. Check that the modifier is on the lazy layout itself, and that you passed the same state object the layout uses.
+It only shows when the list can scroll and has at least `minItemsToShow` items (10 by default). With `AutoHide`, it shows once when the list first has something to scroll, then stays hidden until the list is scrolled. Check that the modifier is on the lazy layout itself, and that you passed the same state object the layout uses.
 
 **The bar scrolls away with my Column.**
 `scrollbar` is chained after `verticalScroll`, so it's inside the scrolled content. Move it before: `.scrollbar(scrollState).verticalScroll(scrollState)`.
