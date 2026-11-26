@@ -71,6 +71,6 @@ body:
     id: versions
     attributes:
       label: Library and Compose versions
-      placeholder: compose-fast-scrollbar 0.1.0, Compose Multiplatform 1.12.2
+      placeholder: compose-fast-scrollbar 0.2.1, Compose Multiplatform 1.10.3
     validations:
       required: true

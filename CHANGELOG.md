@@ -3,6 +3,12 @@
 All notable changes to this project are documented here. The project follows
 [semantic versioning](https://semver.org). While it's on 0.x, minor versions may include breaking changes.
 
+## 0.2.1
+
+### Fixed
+- Taps on the thumb reach the item underneath (a checkbox, a button, the row itself). The thumb only grabs when a finger drags it or holds still on it for a moment (300 ms with Android's default touch-and-hold delay, longer if it's set slower). A drag goes on from where it was grabbed, so the list doesn't jump. While the list is scrolling, a touch on the thumb still grabs it right away, and a mouse still grabs on press.
+- A touch the system cancels while the bar is picked up (the notification shade, a parent that takes the touch) puts the bar back instead of moving it to the side it was carried to.
+
 ## 0.2.0 (2026-11-22)
 
 ### Added

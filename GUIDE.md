@@ -32,7 +32,7 @@ Add the dependency to `commonMain` (or to your app module in a plain Android pro
 
 ```kotlin
 dependencies {
-    implementation("io.github.amaanprobably:compose-fast-scrollbar:0.2.0")
+    implementation("io.github.amaanprobably:compose-fast-scrollbar:0.2.1")
 }
 ```
 
@@ -67,7 +67,7 @@ LazyVerticalGrid(
 
 A few things that are easy to get wrong:
 
-- **Put it on the list, not on a parent.** The scrollbar draws over the list's own bounds and only takes touches that land on the thumb. Everything else goes straight to the list.
+- **Put it on the list, not on a parent.** The scrollbar draws over the list's own bounds and only takes touches that drag or hold the thumb. A quick tap on the thumb still reaches the item under it, and everything else goes straight to the list.
 - **Use the same state object** you pass to `state =`. A second `rememberLazyListState()` would track a list that doesn't exist.
 - **Short lists hide the bar.** It stays hidden when the list can't scroll, or has fewer than `minItemsToShow` items (10 by default). Fast scrolling only pays off on long lists, so raise it for lists that are usually short:
 
@@ -368,7 +368,7 @@ ScrollbarDefaults.style(
 )
 ```
 
-Keep `touchTargetThickness` at 48 dp or more on touch screens. Touches in that strip that miss the thumb still reach the list, so a wide strip doesn't steal scrolls.
+Keep `touchTargetThickness` at 48 dp or more on touch screens. Touches in that strip that miss the thumb still reach the list, so a wide strip doesn't steal scrolls, and a quick tap on the thumb reaches the item under it.
 
 ### Visibility and timing
 
@@ -872,7 +872,7 @@ Lazy lists only know the size of items they've measured, so dragging maps the th
 Fast scrolling pays off on lists at least 4 screens tall (roughly 50+ items), like Android's own fast scroller. On short lists with very uneven items, the estimate moves as items are measured. Raise `minItemsToShow` to hide the bar on lists like that.
 
 **A proportional thumb keeps changing length.**
-That's the estimated content size changing as items of different sizes scroll in. Keep `smoothed = true`, or use the default `ThumbSizing.Fixed`.
+That's the estimated content size changing as items of different sizes scroll in. Keep `smoothed = true`, or use `ThumbSizing.Fixed` (the default on touch screens).
 
 **A collapsing toolbar doesn't react to fast scrolling.**
 Fast scrolling jumps the list straight to its target instead of scrolling through nested scroll, so `TopAppBar` scroll behaviors don't see it. Swiping the list still drives them as usual.

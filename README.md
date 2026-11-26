@@ -23,9 +23,9 @@ https://github.com/user-attachments/assets/8f0c4779-44e3-4107-b11b-78473a625502
 
 ## Features
 
-- **Drag to jump** anywhere in long lists. Touches that miss the thumb still reach the list.
+- **Drag to jump** anywhere in long lists. Taps on the thumb and touches that miss it still reach the list.
 - **One modifier** for `LazyColumn`, `LazyRow`, lazy grids and scrollable `Column`/`Row`. No wrapper composable.
-- **Steady thumb:** fixed length by default, and it glides instead of jumping when items change.
+- **Steady thumb:** fixed length on touch screens, and it glides instead of jumping when items change.
 - **Label bubble** while dragging (a letter, date or section), with a haptic tick per section.
 - **Infinite feeds and chats:** `hasMore`, reversed lists, and pages that load mid-drag.
 - **Make it yours:** colors, sizes, your own icon as the thumb, and an optional visible track.
@@ -38,7 +38,7 @@ https://github.com/user-attachments/assets/8f0c4779-44e3-4107-b11b-78473a625502
 ```kotlin
 // commonMain, or your app module in a plain Android project
 dependencies {
-    implementation("io.github.amaanprobably:compose-fast-scrollbar:0.2.0")
+    implementation("io.github.amaanprobably:compose-fast-scrollbar:0.2.1")
 }
 ```
 
