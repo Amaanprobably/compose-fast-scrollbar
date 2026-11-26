@@ -3,7 +3,7 @@
 All notable changes to this project are documented here. The project follows
 [semantic versioning](https://semver.org). While it's on 0.x, minor versions may include breaking changes.
 
-## 0.2.1
+## 0.2.1 (2026-11-26)
 
 ### Changed
 - An auto-hiding bar shows once when the list first has something to scroll, then fades after the usual delay, so people can see the list goes on. Android's own views and iOS's scroll indicators do the same.
