@@ -345,11 +345,11 @@ Modifier.scrollbar(listState, style = scrollbarStyle)
 
 ### Pick a thumb shape
 
-| Look                        | What it is                                                       | Use it when                                                                                    |
-|-----------------------------|------------------------------------------------------------------|------------------------------------------------------------------------------------------------|
-| `ThumbAppearance.Capsule`   | A translucent capsule with a thin thumb inside. Android default. | You want the classic touch fast-scroller look.                                                 |
-| `ThumbAppearance.Bar`       | One rounded bar that widens inward when held. iOS and desktop default. On Android it sits flush against the edge, like the system's scrollbars. | You want something minimal, or a native iOS feel on Android.                                   |
-| `ThumbAppearance.Icon(...)` | Your own icon.                                                   | You want a branded or playful thumb. See [Use your own icon](#use-your-own-icon-as-the-thumb). |
+| Look                        | What it is                                                                                                                                      | Use it when                                                                                    |
+|-----------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------|
+| `ThumbAppearance.Capsule`   | A translucent capsule with a thin thumb inside. Android default.                                                                                | You want the classic touch fast-scroller look.                                                 |
+| `ThumbAppearance.Bar`       | One rounded bar that widens when held. iOS and desktop default.                                                                                 | You want something minimal, or a native iOS feel on Android.                                   |
+| `ThumbAppearance.Icon(...)` | Your own icon.                                                                                                                                  | You want a branded or playful thumb. See [Use your own icon](#use-your-own-icon-as-the-thumb). |
 
 ```kotlin
 ScrollbarDefaults.style(thumbAppearance = ThumbAppearance.Bar)
@@ -547,18 +547,18 @@ https://github.com/user-attachments/assets/e29dc856-bf78-4d82-8a1c-1a4b3736a9f9
 
 By default, the scrollbar already follows each platform:
 
-| Value                   | Android    | iOS        | Desktop (and `compactStyle`)                  |
-|-------------------------|------------|------------|-----------------------------------------------|
-| Look                    | `Capsule`  | `Bar`      | `Bar`                                         |
-| `thumbThickness`        | 5 dp       | 3 dp       | 8 dp                                          |
-| `pressedThumbThickness` | 8 dp       | 8 dp       | 12 dp                                         |
-| Thumb length            | 40 dp      | 40 dp      | Proportional, min 24 dp                       |
-| Visibility              | `AutoHide` | `AutoHide` | `Always` (Windows, Linux), `AutoHide` (macOS) |
-| `touchTargetThickness`  | 48 dp      | 48 dp      | 16 dp                                         |
-| `trackPadding`          | 8 dp       | 6 dp       | 4 dp                                          |
-| `edgePadding`           | 4 dp (0 dp with `Bar`) | 3 dp | 2 dp                                  |
-| `capsuleThickness`      | 24 dp      | 24 dp      | 16 dp                                         |
-| `capsuleExtraLength`    | 24 dp      | 24 dp      | 8 dp                                          |
+| Value                   | Android                | iOS        | Desktop (and `compactStyle`)                  |
+|-------------------------|------------------------|------------|-----------------------------------------------|
+| Look                    | `Capsule`              | `Bar`      | `Bar`                                         |
+| `thumbThickness`        | 5 dp                   | 3 dp       | 8 dp                                          |
+| `pressedThumbThickness` | 8 dp                   | 8 dp       | 12 dp                                         |
+| Thumb length            | 40 dp                  | 40 dp      | Proportional, min 24 dp                       |
+| Visibility              | `AutoHide`             | `AutoHide` | `Always` (Windows, Linux), `AutoHide` (macOS) |
+| `touchTargetThickness`  | 48 dp                  | 48 dp      | 16 dp                                         |
+| `trackPadding`          | 0 dp                   | 3 dp       | 2 dp                                          |
+| `edgePadding`           | 4 dp                   | 3 dp       | 2 dp                                          |
+| `capsuleThickness`      | 24 dp                  | 24 dp      | 16 dp                                         |
+| `capsuleExtraLength`    | 16 dp                  | 16 dp      | 8 dp                                          |
 
 To give each platform its own style from shared code, without `expect`/`actual` or platform checks, use `platformStyle`. Each argument is a full style, so anything can differ. Pass only the platforms you want to change:
 
@@ -775,25 +775,25 @@ Every public type, parameter and default.
 
 All parameters of `style(...)` and `compactStyle(...)`. "Platform" means the value from the [platform table](#different-looks-per-platform).
 
-| Parameter               | Type                  | Default                    | Description                                                                                       |
-|-------------------------|-----------------------|----------------------------|---------------------------------------------------------------------------------------------------|
-| `thumbAppearance`       | `ThumbAppearance`     | platform                   | `Capsule`, `Bar` or `Icon(...)`.                                                                  |
-| `thumbSizing`           | `ThumbSizing`         | platform                   | `Fixed(length)` or `Proportional(...)`.                                                           |
-| `thumbThickness`        | `Dp`                  | platform                   | Thumb width (height for horizontal bars) at rest.                                                 |
-| `pressedThumbThickness` | `Dp`                  | platform                   | Thumb width while held. The bar look widens to it, and halfway to it on mouse hover.              |
-| `touchTargetThickness`  | `Dp`                  | platform                   | Width of the grab strip along the edge. Touches in it that miss the thumb still reach the list.   |
-| `trackPadding`          | `Dp`                  | platform                   | Space kept free at both ends of the track, along the scroll axis.                                 |
-| `edgePadding`           | `Dp`                  | platform and look          | Space between the bar and the list's edge. 0 dp for `Bar` on Android.                            |
-| `capsuleThickness`      | `Dp`                  | platform                   | Width of the capsule around the thumb (`Capsule` look only).                                      |
-| `capsuleExtraLength`    | `Dp`                  | platform                   | How much longer the capsule is than the thumb, split between both ends (`Capsule` look only).     |
-| `visibility`            | `ScrollbarVisibility` | platform                   | `AutoHide` (fades out after scrolling stops) or `Always`.                                         |
-| `hideDelay`             | `Duration`            | `1.5.seconds`              | How long the bar stays after scrolling stops (`AutoHide` only). Four fifths of it after a drag.   |
-| `fadeInDuration`        | `Duration`            | `150.milliseconds`         | Fade-in time.                                                                                     |
-| `fadeOutDuration`       | `Duration`            | `300.milliseconds`         | Fade-out time.                                                                                    |
-| `thumbColor`            | `Color`               | `Color(0x80808080)`        | Thumb color at rest.                                                                              |
-| `pressedThumbColor`     | `Color`               | `Color(0xFF2196F3)`        | Thumb color while held.                                                                           |
-| `capsuleColor`          | `Color`               | `Color(0x2E808080)`        | Capsule color (`Capsule` look only).                                                              |
-| `trackAppearance`       | `TrackAppearance`     | `TrackAppearance.None`     | An optional visible track.                                                                        |
+| Parameter               | Type                  | Default                | Description                                                                                                                                          |
+|-------------------------|-----------------------|------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `thumbAppearance`       | `ThumbAppearance`     | platform               | `Capsule`, `Bar` or `Icon(...)`.                                                                                                                     |
+| `thumbSizing`           | `ThumbSizing`         | platform               | `Fixed(length)` or `Proportional(...)`.                                                                                                              |
+| `thumbThickness`        | `Dp`                  | platform               | Thumb width (height for horizontal bars) at rest.                                                                                                    |
+| `pressedThumbThickness` | `Dp`                  | platform               | Thumb width while held. The bar look widens to it, and halfway to it on mouse hover.                                                                 |
+| `touchTargetThickness`  | `Dp`                  | platform               | Width of the grab strip along the edge. Touches in it that miss the thumb still reach the list.                                                      |
+| `trackPadding`          | `Dp`                  | platform               | Space kept free at both ends of the track, along the scroll axis. `Capsule` and `Icon` keep at least `edgePadding` there.                            |
+| `edgePadding`           | `Dp`                  | platform               | Space between the bar and the list's edge.                                                                                                           |
+| `capsuleThickness`      | `Dp`                  | platform               | Width of the capsule around the thumb (`Capsule` look only).                                                                                         |
+| `capsuleExtraLength`    | `Dp`                  | platform               | How much longer the capsule is than the thumb, split between both ends (`Capsule` look only). Its ends stop `edgePadding` short of the track's ends. |
+| `visibility`            | `ScrollbarVisibility` | platform               | `AutoHide` (fades out after scrolling stops) or `Always`.                                                                                            |
+| `hideDelay`             | `Duration`            | `1.5.seconds`          | How long the bar stays after scrolling stops (`AutoHide` only). Four fifths of it after a drag.                                                      |
+| `fadeInDuration`        | `Duration`            | `150.milliseconds`     | Fade-in time.                                                                                                                                        |
+| `fadeOutDuration`       | `Duration`            | `300.milliseconds`     | Fade-out time.                                                                                                                                       |
+| `thumbColor`            | `Color`               | `Color(0x80808080)`    | Thumb color at rest.                                                                                                                                 |
+| `pressedThumbColor`     | `Color`               | `Color(0xFF2196F3)`    | Thumb color while held.                                                                                                                              |
+| `capsuleColor`          | `Color`               | `Color(0x2E808080)`    | Capsule color (`Capsule` look only).                                                                                                                 |
+| `trackAppearance`       | `TrackAppearance`     | `TrackAppearance.None` | An optional visible track.                                                                                                                           |
 
 ### `ThumbAppearance.Icon`
 

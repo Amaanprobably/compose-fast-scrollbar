@@ -154,9 +154,8 @@ public sealed interface ThumbAppearance {
     /**
      * A single rounded bar with no capsule, like desktop scrollbars. The default on desktop, and
      * available everywhere. It uses the style's thumb thickness, color and [ThumbSizing]
-     * parameters; the capsule parameters are ignored. It widens inward from
-     * [ScrollbarStyle.thumbThickness] to [ScrollbarStyle.pressedThumbThickness] when hovered or
-     * dragged, keeping its outer edge in place.
+     * parameters; the capsule parameters are ignored. It widens from [ScrollbarStyle.thumbThickness]
+     * to [ScrollbarStyle.pressedThumbThickness] when hovered or dragged.
      */
     public data object Bar : ThumbAppearance
 
@@ -393,22 +392,15 @@ internal class StyleDefaults(
     val touchTargetThickness: Dp,
     val trackPadding: Dp,
     val edgePadding: Dp,
-    /** [edgePadding] for [ThumbAppearance.Bar], which sits closer to the edge than a capsule. */
-    val barEdgePadding: Dp,
     val capsuleThickness: Dp,
     val capsuleExtraLength: Dp,
-) {
-    /** The edge padding [ScrollbarDefaults.style] uses for [appearance]. */
-    fun edgePaddingFor(appearance: ThumbAppearance): Dp = when (appearance) {
-        ThumbAppearance.Bar -> barEdgePadding
-        else -> edgePadding
-    }
-}
+)
 
 /**
  * Android: a capsule with a thumb inside, like the platform fast scroller. The capsule is 24dp
- * wide and 64dp long (40dp thumb + 24dp), close to Google's own 24dp x 63dp drag handle, so it
- * covers little content. The 48dp touch strip keeps it easy to grab.
+ * wide and 56dp long (40dp thumb + 16dp), so it covers little content, and it stops 4dp short of
+ * the track's ends, the same gap as at the side. The 48dp touch strip keeps it easy to grab, and
+ * the thumb plus Android's 8dp touch slop covers the whole capsule's length.
  */
 internal val AndroidDefaults = StyleDefaults(
     thumbAppearance = ThumbAppearance.Capsule,
@@ -417,11 +409,10 @@ internal val AndroidDefaults = StyleDefaults(
     thumbLength = 40.dp,
     thumbSizing = ThumbSizing.Fixed(40.dp),
     touchTargetThickness = 48.dp,
-    trackPadding = 8.dp,
+    trackPadding = 0.dp, // the bar reaches the ends, like Android's own scrollbars
     edgePadding = 4.dp,
-    barEdgePadding = 0.dp, // flush, like Android's own scrollbars and RecyclerView's fast scroller
     capsuleThickness = 24.dp,
-    capsuleExtraLength = 24.dp,
+    capsuleExtraLength = 16.dp,
 )
 
 /**
@@ -435,11 +426,10 @@ internal val IosDefaults = StyleDefaults(
     thumbLength = 40.dp,
     thumbSizing = ThumbSizing.Fixed(40.dp),
     touchTargetThickness = 48.dp,
-    trackPadding = 6.dp,
+    trackPadding = 3.dp, // 3pt from the ends, like the system scroll indicator
     edgePadding = 3.dp,
-    barEdgePadding = 3.dp,
     capsuleThickness = 24.dp, // unused by Bar, same as Android for apps that switch to Capsule
-    capsuleExtraLength = 24.dp,
+    capsuleExtraLength = 16.dp,
 )
 
 /**
@@ -454,9 +444,8 @@ internal val CompactDefaults = StyleDefaults(
     thumbLength = 40.dp,
     thumbSizing = ThumbSizing.Proportional(minLength = 24.dp),
     touchTargetThickness = 16.dp,
-    trackPadding = 4.dp,
+    trackPadding = 2.dp, // 2px from the ends, like macOS
     edgePadding = 2.dp,
-    barEdgePadding = 2.dp, // like macOS; Windows 11 is 3px
     capsuleThickness = 16.dp,
     capsuleExtraLength = 8.dp,
 )
@@ -480,9 +469,9 @@ public object ScrollbarDefaults {
      * and Linux, [ScrollbarVisibility.AutoHide] on Android, iOS and macOS. On desktop the thumb is
      * [ThumbSizing.Proportional], like system scrollbars; on touch screens it's a fixed 40dp handle.
      *
-     * The default `edgePadding` follows the look: a [ThumbAppearance.Bar] on Android sits flush
-     * against the edge, like Android's own scrollbars, while the capsule keeps 4dp so it reads as
-     * a floating handle.
+     * The default `trackPadding` follows the system's own scrollbars at the ends of the track:
+     * none on Android, 3dp on iOS, 2dp on desktop. The capsule and an icon keep at least their
+     * `edgePadding` at the ends, the same gap as at the side.
      *
      * It is a plain function, so it can be hoisted into a top-level `val` and shared.
      */
@@ -494,7 +483,7 @@ public object ScrollbarDefaults {
         visibility: ScrollbarVisibility = platformDefaultVisibility,
         touchTargetThickness: Dp = PlatformDefaults.touchTargetThickness,
         trackPadding: Dp = PlatformDefaults.trackPadding,
-        edgePadding: Dp = PlatformDefaults.edgePaddingFor(thumbAppearance),
+        edgePadding: Dp = PlatformDefaults.edgePadding,
         capsuleThickness: Dp = PlatformDefaults.capsuleThickness,
         capsuleExtraLength: Dp = PlatformDefaults.capsuleExtraLength,
         hideDelay: Duration = 1_500.milliseconds,
@@ -1743,14 +1732,16 @@ internal class ScrollbarConfig(
         target.isReversed != (!target.isVertical && layoutDirection == LayoutDirection.Rtl)
 
     /**
-     * How far the thumb stops from each end of the track. For the capsule look it's at least half
-     * the capsule's extra length, so the capsule never has to be pushed back inside the list at
-     * the ends, which would leave the thumb off-center in it.
+     * How far the thumb stops from each end of the track. Never less than
+     * [ScrollbarStyle.trackPadding]. The capsule and an icon also keep [ScrollbarStyle.edgePadding]
+     * at the ends, the same gap as at the side; for the capsule that's measured from the capsule
+     * around the thumb, which stays centered in it.
      */
     val thumbEndPadding: Dp
         get() = when (style.thumbAppearance) {
-            ThumbAppearance.Capsule -> maxOf(style.trackPadding, style.capsuleExtraLength / 2)
-            ThumbAppearance.Bar, is ThumbAppearance.Icon -> style.trackPadding
+            ThumbAppearance.Capsule -> maxOf(style.trackPadding, style.capsuleExtraLength / 2 + style.edgePadding)
+            is ThumbAppearance.Icon -> maxOf(style.trackPadding, style.edgePadding)
+            ThumbAppearance.Bar -> style.trackPadding
         }
 
     /**
@@ -2919,20 +2910,7 @@ private fun DrawScope.drawMoveHint(
     line(endTip, pointOf(isVertical, mainCenter + head, crossCenter + halfArrow - head))
 }
 
-/**
- * Where a bar of [thickness] starts across the scroll axis inside its slot: on the slot's side
- * nearer the list's edge, so the bar widens inward and its outer edge stays put.
- */
-internal fun barCrossStart(slotCrossStart: Float, slotThickness: Float, thickness: Float, crossLength: Float): Float {
-    val nearOrigin = slotCrossStart + slotThickness / 2f < crossLength / 2f
-    return if (nearOrigin) slotCrossStart else slotCrossStart + slotThickness - thickness
-}
-
-/**
- * A single rounded bar. Its slot is as wide as the pressed bar, and the bar keeps to the slot's
- * outer side, nearer the list's edge, so it widens inward and its distance from the edge is just
- * the edge padding, like macOS and Windows scrollbars.
- */
+/** A single rounded bar, centered in its slot so it widens in place. */
 private fun DrawScope.drawBar(
     isVertical: Boolean,
     geometry: ThumbGeometry,
@@ -2942,12 +2920,7 @@ private fun DrawScope.drawBar(
     slotCrossStart: Float,
     slotThickness: Float,
 ) {
-    val crossStart = barCrossStart(
-        slotCrossStart = slotCrossStart,
-        slotThickness = slotThickness,
-        thickness = thickness,
-        crossLength = if (isVertical) size.width else size.height,
-    )
+    val crossStart = slotCrossStart + (slotThickness - thickness) / 2f
     drawRoundRect(
         color = color,
         topLeft = pointOf(isVertical, geometry.start, crossStart),

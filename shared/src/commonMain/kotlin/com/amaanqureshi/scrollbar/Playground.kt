@@ -49,6 +49,7 @@ import io.github.amaanprobably.scrollbar.ScrollbarLabel
 import io.github.amaanprobably.scrollbar.ScrollbarLabelStyle
 import io.github.amaanprobably.scrollbar.ScrollbarStyle
 import io.github.amaanprobably.scrollbar.ScrollbarVisibility
+import io.github.amaanprobably.scrollbar.ThumbAppearance
 import io.github.amaanprobably.scrollbar.scrollbar
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.milliseconds
@@ -88,6 +89,10 @@ internal fun PlaygroundScreen(onBack: () -> Unit) {
     var alwaysVisible by rememberSaveable {
         mutableStateOf(ScrollbarDefaults.style().visibility == ScrollbarVisibility.Always)
     }
+    // Starts on the platform's own look: the capsule on Android, the bar on iOS and desktop.
+    var barLook by rememberSaveable {
+        mutableStateOf(ScrollbarDefaults.style().thumbAppearance == ThumbAppearance.Bar)
+    }
     // On (the default), only the top is padded, like a typical app, so the list reaches the side
     // edges (the back gesture zones) and runs under the gesture bar. Off, safeContentPadding()
     // pads every side by the gesture zones too, which keeps the bar away from the back gesture.
@@ -98,6 +103,7 @@ internal fun PlaygroundScreen(onBack: () -> Unit) {
 
     val style = brandScrollbarStyle(
         visibility = if (alwaysVisible) ScrollbarVisibility.Always else ScrollbarVisibility.AutoHide,
+        thumbAppearance = if (barLook) ThumbAppearance.Bar else ThumbAppearance.Capsule,
     )
     val labelStyle = brandLabelStyle()
     val label = remember(showLabel, itemCount, labelStyle) {
@@ -121,6 +127,7 @@ internal fun PlaygroundScreen(onBack: () -> Unit) {
                 withPadding = withPadding, onWithPadding = { withPadding = it },
                 alwaysVisible = alwaysVisible, onAlwaysVisible = { alwaysVisible = it },
                 showLabel = showLabel, onShowLabel = { showLabel = it },
+                barLook = barLook, onBarLook = { barLook = it },
                 shortContainer = shortContainer, onShortContainer = { shortContainer = it },
                 edgeToEdge = edgeToEdge, onEdgeToEdge = { edgeToEdge = it },
             )
@@ -155,6 +162,7 @@ private fun Controls(
     withPadding: Boolean, onWithPadding: (Boolean) -> Unit,
     alwaysVisible: Boolean, onAlwaysVisible: (Boolean) -> Unit,
     showLabel: Boolean, onShowLabel: (Boolean) -> Unit,
+    barLook: Boolean, onBarLook: (Boolean) -> Unit,
     shortContainer: Boolean, onShortContainer: (Boolean) -> Unit,
     edgeToEdge: Boolean, onEdgeToEdge: (Boolean) -> Unit,
 ) {
@@ -175,6 +183,7 @@ private fun Controls(
             Chip(selected = withPadding, text = "Padding", onClick = { onWithPadding(!withPadding) })
             Chip(selected = alwaysVisible, text = "Always visible", onClick = { onAlwaysVisible(!alwaysVisible) })
             Chip(selected = showLabel, text = "Label", onClick = { onShowLabel(!showLabel) })
+            Chip(selected = barLook, text = "Bar", onClick = { onBarLook(!barLook) })
             Chip(selected = shortContainer, text = "Short", onClick = { onShortContainer(!shortContainer) })
             Chip(selected = edgeToEdge, text = "Edge-to-edge", onClick = { onEdgeToEdge(!edgeToEdge) })
         }

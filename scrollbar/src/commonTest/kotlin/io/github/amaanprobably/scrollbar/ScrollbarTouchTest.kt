@@ -46,7 +46,7 @@ private val touchTestStyle = ScrollbarDefaults.style(
     touchTargetThickness = 48.dp,
     edgePadding = 4.dp,
     capsuleThickness = 32.dp,
-    capsuleExtraLength = 16.dp,
+    capsuleExtraLength = 8.dp, // half of it plus the 4 dp edge gap is 8 dp, the track padding
     visibility = ScrollbarVisibility.Always,
 )
 
@@ -57,7 +57,7 @@ private val touchTestAutoHideStyle = ScrollbarDefaults.style(
     touchTargetThickness = 48.dp,
     edgePadding = 4.dp,
     capsuleThickness = 32.dp,
-    capsuleExtraLength = 16.dp,
+    capsuleExtraLength = 8.dp, // half of it plus the 4 dp edge gap is 8 dp, the track padding
     visibility = ScrollbarVisibility.AutoHide,
 )
 

@@ -258,27 +258,53 @@ class EdgeGuardSpanTest {
 
 class ThumbEndPaddingTest {
     @Test
-    fun capsuleKeepsTheThumbFarEnoughFromTheEndsToStayCentered() {
+    fun theCapsuleStopsTheEdgeGapShortOfTheEnds() {
+        // The thumb stays centered, so the capsule reaches 12 dp past it: 12 + 4 beats 8.
         val capsule = ScrollbarDefaults.style(
-            thumbAppearance = ThumbAppearance.Capsule, trackPadding = 8.dp, capsuleExtraLength = 24.dp,
+            thumbAppearance = ThumbAppearance.Capsule, trackPadding = 8.dp,
+            edgePadding = 4.dp, capsuleExtraLength = 24.dp,
         )
-        assertEquals(12.dp, config(style = capsule).thumbEndPadding) // half of 24 beats 8
+        assertEquals(16.dp, config(style = capsule).thumbEndPadding)
     }
 
     @Test
     fun trackPaddingWinsWhenItIsAlreadyEnough() {
         val capsule = ScrollbarDefaults.style(
-            thumbAppearance = ThumbAppearance.Capsule, trackPadding = 8.dp, capsuleExtraLength = 10.dp,
+            thumbAppearance = ThumbAppearance.Capsule, trackPadding = 8.dp,
+            edgePadding = 2.dp, capsuleExtraLength = 6.dp,
         )
-        assertEquals(8.dp, config(style = capsule).thumbEndPadding)
+        assertEquals(8.dp, config(style = capsule).thumbEndPadding) // 3 + 2 is less than 8
     }
 
     @Test
-    fun barAndIconUseTrackPaddingOnly() {
+    fun theBarUsesTrackPaddingOnly() {
         val bar = ScrollbarDefaults.style(
-            thumbAppearance = ThumbAppearance.Bar, trackPadding = 6.dp, capsuleExtraLength = 40.dp,
+            thumbAppearance = ThumbAppearance.Bar, trackPadding = 6.dp,
+            edgePadding = 10.dp, capsuleExtraLength = 40.dp,
         )
         assertEquals(6.dp, config(style = bar).thumbEndPadding)
+    }
+
+    @Test
+    fun anIconKeepsTheEdgeGapAtTheEnds() {
+        val icon = ScrollbarDefaults.style(
+            thumbAppearance = ThumbAppearance.Icon(ColorPainter(Color.Red), DpSize(24.dp, 30.dp)),
+            trackPadding = 0.dp, edgePadding = 4.dp,
+        )
+        assertEquals(4.dp, config(style = icon).thumbEndPadding)
+        val roomier = ScrollbarDefaults.style(
+            thumbAppearance = ThumbAppearance.Icon(ColorPainter(Color.Red), DpSize(24.dp, 30.dp)),
+            trackPadding = 8.dp, edgePadding = 4.dp,
+        )
+        assertEquals(8.dp, config(style = roomier).thumbEndPadding)
+    }
+
+    @Test
+    fun aDefaultBarReachesTheEndsLikeTheSystemScrollbars() {
+        // Android's own scrollbars reach the ends, iOS keeps 3pt and macOS 2px.
+        assertEquals(0.dp, AndroidDefaults.trackPadding)
+        assertEquals(3.dp, IosDefaults.trackPadding)
+        assertEquals(2.dp, CompactDefaults.trackPadding)
     }
 }
 
@@ -299,17 +325,6 @@ class ThumbPlacementTest {
     fun restingPositionSitsAtTheEdgePadding() = with(testDensity) {
         assertEquals(364f, restingCrossStart(config(ScrollbarEdge.End), true, 400f, 32f))
         assertEquals(4f, restingCrossStart(config(ScrollbarEdge.Start), true, 400f, 32f))
-    }
-
-    @Test
-    fun aBarKeepsItsOuterEdgeAndWidensInward() {
-        // An 8 px slot flush against the right edge of a 400 px list: the bar ends at 400 whether
-        // it's 5 px at rest or 8 px when grabbed.
-        assertEquals(395f, barCrossStart(slotCrossStart = 392f, slotThickness = 8f, thickness = 5f, crossLength = 400f))
-        assertEquals(392f, barCrossStart(slotCrossStart = 392f, slotThickness = 8f, thickness = 8f, crossLength = 400f))
-        // On the left edge it starts at the slot's start instead.
-        assertEquals(0f, barCrossStart(slotCrossStart = 0f, slotThickness = 8f, thickness = 5f, crossLength = 400f))
-        assertEquals(0f, barCrossStart(slotCrossStart = 0f, slotThickness = 8f, thickness = 8f, crossLength = 400f))
     }
 }
 
@@ -362,7 +377,13 @@ class StyleDefaultsTest {
     @Test
     fun androidCapsuleIsSlimAndRoomy() {
         assertEquals(24.dp, AndroidDefaults.capsuleThickness)
-        assertEquals(64.dp, AndroidDefaults.thumbLength + AndroidDefaults.capsuleExtraLength)
+        assertEquals(56.dp, AndroidDefaults.thumbLength + AndroidDefaults.capsuleExtraLength)
+        // The capsule plus a 4 dp gap at each end takes the 64 dp the old flush capsule did, so the
+        // thumb travels just as far.
+        assertEquals(
+            12.dp,
+            AndroidDefaults.capsuleExtraLength / 2 + AndroidDefaults.edgePadding,
+        )
         assertEquals(48.dp, AndroidDefaults.touchTargetThickness, "the grab area doesn't shrink with the capsule")
     }
 
@@ -371,22 +392,6 @@ class StyleDefaultsTest {
         assertEquals(ThumbAppearance.Bar, IosDefaults.thumbAppearance)
         assertTrue(IosDefaults.thumbThickness < IosDefaults.pressedThumbThickness)
         assertEquals(48.dp, IosDefaults.touchTargetThickness, "a finger-sized grab area")
-    }
-
-    @Test
-    fun edgePaddingFollowsTheLook() {
-        // A thin bar sits flush on Android, like the system's own scrollbars. The capsule floats.
-        assertEquals(0.dp, AndroidDefaults.edgePaddingFor(ThumbAppearance.Bar))
-        assertEquals(4.dp, AndroidDefaults.edgePaddingFor(ThumbAppearance.Capsule))
-        assertEquals(3.dp, IosDefaults.edgePaddingFor(ThumbAppearance.Bar))
-        assertEquals(2.dp, CompactDefaults.edgePaddingFor(ThumbAppearance.Bar))
-
-        val bar = ScrollbarDefaults.style(thumbAppearance = ThumbAppearance.Bar)
-        assertEquals(PlatformDefaults.edgePaddingFor(ThumbAppearance.Bar), bar.edgePadding)
-        val capsule = ScrollbarDefaults.style(thumbAppearance = ThumbAppearance.Capsule)
-        assertEquals(PlatformDefaults.edgePaddingFor(ThumbAppearance.Capsule), capsule.edgePadding)
-        // An explicit value still wins.
-        assertEquals(6.dp, ScrollbarDefaults.style(thumbAppearance = ThumbAppearance.Bar, edgePadding = 6.dp).edgePadding)
     }
 
     @Test
