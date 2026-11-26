@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "io.github.amaanprobably"
-version = "0.2.0"
+version = "0.2.1"
 
 kotlin {
     explicitApi()
@@ -97,7 +97,7 @@ mavenPublishing {
 
     pom {
         name = "Compose Fast Scrollbar"
-        description = "A draggable fast scrollbar for Jetpack Compose and Compose Multiplatform lazy layouts."
+        description = "A draggable fast scrollbar for Jetpack Compose and Compose Multiplatform lazy layouts and scrollable Columns and Rows."
         inceptionYear = "2026"
         url = "https://github.com/Amaanprobably/compose-fast-scrollbar"
         licenses {
@@ -127,5 +127,6 @@ tasks.withType<Test>().matching { it.name == "testAndroidHostTest" }.configureEa
     filter {
         excludeTestsMatching("io.github.amaanprobably.scrollbar.ScrollbarUiTest")
         excludeTestsMatching("io.github.amaanprobably.scrollbar.ScrollbarScrollStateTest")
+        excludeTestsMatching("io.github.amaanprobably.scrollbar.ScrollbarTouchTest")
     }
 }

@@ -44,6 +44,7 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.AwaitPointerEventScope
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerInputChange
@@ -92,7 +93,6 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.TimeSource
 import androidx.compose.ui.graphics.lerp as lerpColor
 
 /**
@@ -170,7 +170,7 @@ public sealed interface ThumbAppearance {
      * - [pressedScale] grows the icon slightly while it is held. Use `1f` to turn it off.
      * - The icon is never mirrored or rotated, only positioned. For right-to-left layouts, set
      *   `autoMirror` on a vector yourself if it should flip.
-     * - Touches anywhere on the icon grab it. The touch target is never smaller than
+     * - Dragging or holding anywhere on the icon grabs it. The touch target is never smaller than
      *   [ScrollbarStyle.touchTargetThickness].
      *
      * Painters should be created with `remember` (as `painterResource` and `rememberVectorPainter`
@@ -519,7 +519,7 @@ public object ScrollbarDefaults {
      *         thumbAppearance = ThumbAppearance.Icon(idle = logoPainter, size = DpSize(32.dp, 32.dp)),
      *     ),
      *     desktop = ScrollbarDefaults.compactStyle(
-     *         thumbSizing = ThumbSizing.Proportional(),
+     *         thumbSizing = ThumbSizing.Fixed(),
      *         hideDelay = 3.seconds,
      *     ),
      * )
@@ -586,8 +586,10 @@ internal val DefaultScrollbarStyle: ScrollbarStyle = ScrollbarDefaults.style()
  * Draggable fast scroller for a [androidx.compose.foundation.lazy.LazyColumn] or
  * [androidx.compose.foundation.lazy.LazyRow].
  *
- * Apply it to the lazy list itself. Only touches that land on the thumb are taken;
- * every other touch reaches the list untouched.
+ * Apply it to the lazy list itself. Only touches that start on the thumb and drag it, or hold
+ * still on it for a moment, are taken. A quick tap on the thumb still reaches the item under it,
+ * and every other touch reaches the list untouched. While the thumb is visible, a long press that
+ * starts on it grabs the thumb instead of reaching the item underneath.
  *
  * With a mouse (desktop, or a mouse on Android and iPad), hovering near the bar reveals it and
  * highlights the thumb, hovering the track previews the [label] for that position, and clicking
@@ -999,6 +1001,69 @@ private const val HAS_MORE_END_CAP = 0.95f
  */
 private const val EDGE_MOVE_MIN_HOLD_MILLIS = 500L
 
+/**
+ * A finger held still on the thumb for this share of the system long press grabs it: 300 ms with
+ * Android's 400 ms default, three times its 100 ms tap timeout, so taps still reach whatever is
+ * under the thumb. It scales with a slower touch-and-hold delay set in accessibility settings, and
+ * always lands before [EDGE_MOVE_MIN_HOLD_MILLIS], so grabbing and picking up stay two steps.
+ */
+private const val GRAB_HOLD_NUMERATOR = 3L
+private const val GRAB_HOLD_DENOMINATOR = 4L
+
+/** Where and when a touch on the thumb turned into a grab. */
+private class ThumbClaim(
+    /** The finger's position along the scroll axis when the grab started. */
+    val mainPosition: Float,
+    /** Time since the finger landed, in milliseconds. */
+    val elapsedMillis: Long,
+    /** True when moving claimed it (a drag), false for a hold or an immediate grab. */
+    val moved: Boolean,
+)
+
+/**
+ * Waits for a finger resting on the thumb to become a drag (it moves past the touch slop along the
+ * bar) or a hold (it stays still for three quarters of the long press). Returns null for anything
+ * else, without consuming it, so the touch still reaches what is under the thumb: a tap, a swipe
+ * across the bar, a second finger, or a cancel (which arrives as a release).
+ */
+private suspend fun AwaitPointerEventScope.awaitThumbClaim(
+    down: PointerInputChange,
+    isVertical: Boolean,
+): ThumbClaim? {
+    val touchSlop = viewConfiguration.touchSlop
+    val holdMillis = viewConfiguration.longPressTimeoutMillis * GRAB_HOLD_NUMERATOR / GRAB_HOLD_DENOMINATOR
+    var elapsedMillis = 0L
+    var mainPosition = if (isVertical) down.position.y else down.position.x
+    while (true) {
+        // Event times, not a wall clock, so tests on a virtual clock see the same timing.
+        val remaining = holdMillis - elapsedMillis
+        val event = if (remaining <= 0L) {
+            null
+        } else {
+            withTimeoutOrNull(remaining) { awaitPointerEvent(PointerEventPass.Initial) }
+        }
+        // Held still long enough: a hold.
+        if (event == null) return ThumbClaim(mainPosition, holdMillis, moved = false)
+        // A second finger: a pinch or a different gesture, not a drag of the thumb.
+        if (event.changes.any { it.id != down.id && it.pressed }) return null
+        val change = event.changes.firstOrNull { it.id == down.id } ?: return null
+        // Lifted before anything happened: a tap. Already taken by someone else: theirs.
+        if (!change.pressed || change.isConsumed) return null
+        elapsedMillis = change.uptimeMillis - down.uptimeMillis
+        mainPosition = if (isVertical) change.position.y else change.position.x
+        val moved = change.position - down.position
+        val along = abs(if (isVertical) moved.y else moved.x)
+        val across = abs(if (isVertical) moved.x else moved.y)
+        when {
+            along >= touchSlop && along >= across -> {
+                change.consume() // before the list sees it, so the list doesn't start scrolling
+                return ThumbClaim(mainPosition, elapsedMillis, moved = true)
+            }
+            across >= touchSlop -> return null
+        }
+    }
+}
+
 /** Move hint shown next to a picked-up thumb: circle radius and its gap from the thumb. */
 private val MOVE_HINT_RADIUS = 14.dp
 private val MOVE_HINT_GAP = 8.dp
@@ -1263,6 +1328,21 @@ private class ScrollbarController(
     /** True while the mouse is over the bar's strip. Keeps the bar visible, like a drag does. */
     var stripHovered = false
         private set
+
+    /**
+     * True while a finger rests on the thumb but hasn't grabbed it yet (it might still be a tap).
+     * Keeps the bar from fading out under the finger, like a drag does.
+     */
+    private var touchPending = false
+
+    /** Something is holding the bar on screen: a drag, a hovering mouse, or a waiting finger. */
+    private val heldVisible: Boolean get() = dragging || stripHovered || touchPending
+
+    fun setTouchPending(pending: Boolean) {
+        if (pending == touchPending) return
+        touchPending = pending
+        signalActivity() // keeps the bar up while the finger waits, restarts the hide delay after
+    }
     private var thumbHovered = false
     private var thumbHoverJob: Job? = null
     private var previewJob: Job? = null
@@ -1350,8 +1430,8 @@ private class ScrollbarController(
             fade.animateTo(1f, tween(style.fadeInDuration.inWholeMilliseconds.toInt()))
             while (true) {
                 events.tryReceive() // drop stale events
-                if (dragging || stripHovered) {
-                    // Held or hovered: stay visible until that ends and sends an event.
+                if (heldVisible) {
+                    // Held, hovered or touched: stay visible until that ends and sends an event.
                     events.receiveCatching().getOrNull() ?: return@launch
                     continue
                 }
@@ -1360,7 +1440,7 @@ private class ScrollbarController(
                 }
                 if (next == null) break
             }
-            if (!dragging && !stripHovered) {
+            if (!heldVisible) {
                 fade.animateTo(0f, tween(style.fadeOutDuration.inWholeMilliseconds.toInt()))
             }
         }
@@ -1867,7 +1947,7 @@ private fun Modifier.scrollbarFor(
     }
 
     // Proportional sizing only: animates the estimated ratio so content-size jitter is hidden.
-    // The default fixed thumb doesn't launch it, so it doesn't re-run on every scroll frame.
+    // A fixed thumb (the touch default) doesn't launch it, so it doesn't re-run on every scroll frame.
     val sizingOption = style.thumbSizing
     val smoothingEnabled = sizingOption is ThumbSizing.Proportional && sizingOption.smoothed
     // Before the draw, so a thumb switched to smoothing later never shows a value from before.
@@ -1939,11 +2019,6 @@ private fun Modifier.scrollbarFor(
             ) {
                 return@awaitEachGesture
             }
-            val isMirrored = currentConfig.isMirrored(target)
-            val startPadding = currentConfig.mainAxisStartPaddingPx(this, isVertical)
-            val trackLength = geometry.trackLength
-            val shownFraction =
-                controller.displayedFraction(target, currentConfig.style.thumbSizing, metrics.thumbFraction)
 
             val onThumb =
                 downMain in (geometry.start - slop)..(geometry.start + geometry.length + slop)
@@ -1952,10 +2027,43 @@ private fun Modifier.scrollbarFor(
             // track jumps there instead and then drags like a grab.
             if (!onThumb && !isMouse) return@awaitEachGesture
 
-            // On the thumb, keep the finger's position inside it so it never jumps. On the
-            // track, center the thumb under the cursor (same mapping as the hover preview).
+            // A finger on the thumb might still be a tap on whatever is under it (a checkbox, a
+            // button), so it only grabs once it's clearly a drag or a hold. While the list is
+            // scrolling it grabs right away: the list would catch the finger on its first move,
+            // and a tap there only stops the scroll anyway. A mouse always grabs on press.
+            val waitForClaim = onThumb && !isMouse && !target.state.isScrollInProgress
+            val claim = if (waitForClaim) {
+                controller.setTouchPending(true)
+                try {
+                    awaitThumbClaim(down, isVertical)
+                } finally {
+                    controller.setTouchPending(false)
+                }
+            } else {
+                ThumbClaim(downMain, elapsedMillis = 0L, moved = false)
+            }
+            // A tap, a swipe across the bar, a second finger or a cancel: not ours.
+            if (claim == null) return@awaitEachGesture
+            // The list may have moved while the finger waited (a page loaded, items were added).
+            if (waitForClaim && !layoutThumbForInput(
+                    target, currentConfig, controller, metrics, geometry, isVertical, containerLength,
+                )
+            ) {
+                return@awaitEachGesture
+            }
+
+            val isMirrored = currentConfig.isMirrored(target)
+            val startPadding = currentConfig.mainAxisStartPaddingPx(this, isVertical)
+            val trackLength = geometry.trackLength
+            val shownFraction =
+                controller.displayedFraction(target, currentConfig.style.thumbSizing, metrics.thumbFraction)
+
+            // On the thumb, keep the finger's position inside it so it never jumps: a drag goes on
+            // from where it was claimed, not from where the finger landed, so the list doesn't jump
+            // by the touch slop. On the track, center the thumb under the cursor (same mapping as
+            // the hover preview).
             val grabOffset =
-                if (onThumb) (downMain - geometry.start).coerceIn(0f, geometry.length)
+                if (onThumb) (claim.mainPosition - geometry.start).coerceIn(0f, geometry.length)
                 else geometry.length / 2f
 
             /** Thumb position (0..endCap) for a finger position. Not yet divided by [endCap]. */
@@ -2062,12 +2170,14 @@ private fun Modifier.scrollbarFor(
                 // Edge move: a long press on the thumb without moving picks it up. Moving first
                 // makes it a normal drag for the rest of the gesture.
                 val edgeMoveEnabled = currentConfig.onEdgeChange != null && onThumb && !isMouse
-                val grabMark = TimeSource.Monotonic.markNow()
                 // At least 500 ms, and never shorter than the system long press, so people who set
                 // a slower touch-and-hold in accessibility settings keep their longer delay.
                 val holdMillis = max(viewConfiguration.longPressTimeoutMillis, EDGE_MOVE_MIN_HOLD_MILLIS)
+                // Counted from when the finger landed, also when a hold grabbed the thumb first.
+                // Event times, not a wall clock, so tests on a virtual clock see the same timing.
+                var elapsedMillis = claim.elapsedMillis
                 val touchSlop = viewConfiguration.touchSlop
-                var movedSinceDown = false
+                var movedSinceDown = claim.moved
                 val crossThumbLength = crossLengthOfThumb(currentConfig.style, isVertical)
                 val restingCenter = restingCrossStart(
                     currentConfig, isVertical, crossLength, crossThumbLength,
@@ -2077,7 +2187,7 @@ private fun Modifier.scrollbarFor(
                     val waitingForLongPress =
                         edgeMoveEnabled && !movedSinceDown && !controller.movingEdge
                     val event = if (waitingForLongPress) {
-                        val remaining = holdMillis - grabMark.elapsedNow().inWholeMilliseconds
+                        val remaining = holdMillis - elapsedMillis
                         if (remaining <= 0L) null
                         else withTimeoutOrNull(remaining) { awaitPointerEvent(PointerEventPass.Initial) }
                     } else {
@@ -2100,9 +2210,14 @@ private fun Modifier.scrollbarFor(
                         }
                     }
                     if (change == null) break
+                    elapsedMillis = change.uptimeMillis - down.uptimeMillis
                     if (!change.pressed) {
+                        // A cancel (the system or a parent took the touch) arrives as a release
+                        // that is already consumed. It puts a picked-up bar back instead of
+                        // dropping it on the side it was carried to.
+                        val canceled = change.isConsumed
                         change.consume()
-                        if (controller.movingEdge) {
+                        if (controller.movingEdge && !canceled) {
                             // Dropped: the nearest edge wins. The app stores it and passes it
                             // back as `edge`; until then the thumb glides toward the old edge.
                             val newEdge = currentConfig.edgeAt(

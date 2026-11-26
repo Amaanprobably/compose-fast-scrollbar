@@ -42,6 +42,7 @@ import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import kotlin.math.abs
+import kotlin.math.sign
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -112,6 +113,18 @@ private fun TouchInjectionScope.drag(from: Offset, to: Offset) {
     up()
 }
 
+/**
+ * Grabs the thumb at [from] by moving just past the touch slop, then moves it by [by] along the
+ * bar and lifts. The thumb follows the finger from where it was grabbed, so it moves by exactly [by].
+ */
+private fun TouchInjectionScope.grabAndMove(from: Offset, by: Float) {
+    val grabbedAt = from + Offset(0f, sign(by) * (viewConfiguration.touchSlop + 1f))
+    down(from)
+    moveTo(grabbedAt)
+    moveInSteps(grabbedAt, grabbedAt + Offset(0f, by))
+    up()
+}
+
 /** Runs the custom accessibility action named [label] on the scroll area. */
 @OptIn(ExperimentalTestApi::class)
 private fun ComposeUiTest.runAccessibilityAction(label: String) {
@@ -147,8 +160,7 @@ class ScrollbarScrollStateTest {
         onNodeWithTag(SCROLL_TAG).performTouchInput {
             // Half the thumb's travel: track = height - 2 * 8 dp - 40 dp.
             val halfTrack = (height - 56.dp.toPx()) / 2f
-            val start = Offset(right - 10f, 28.dp.toPx())
-            drag(start, start + Offset(0f, halfTrack))
+            grabAndMove(Offset(right - 10f, 28.dp.toPx()), halfTrack)
         }
         waitForIdle()
         val half = state.maxValue / 2

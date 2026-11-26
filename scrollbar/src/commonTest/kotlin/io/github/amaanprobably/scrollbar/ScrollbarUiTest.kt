@@ -36,6 +36,7 @@ import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
+import kotlin.math.sign
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -150,6 +151,18 @@ private fun TouchInjectionScope.drag(from: Offset, to: Offset) {
     up()
 }
 
+/**
+ * Grabs the thumb at [from] by moving just past the touch slop, then moves it by [by] along the
+ * bar and lifts. The thumb follows the finger from where it was grabbed, so it moves by exactly [by].
+ */
+private fun TouchInjectionScope.grabAndMove(from: Offset, by: Float) {
+    val grabbedAt = from + Offset(0f, sign(by) * (viewConfiguration.touchSlop + 1f))
+    down(from)
+    moveTo(grabbedAt)
+    moveInSteps(grabbedAt, grabbedAt + Offset(0f, by))
+    up()
+}
+
 @OptIn(ExperimentalTestApi::class)
 class ScrollbarUiTest {
 
@@ -233,8 +246,7 @@ class ScrollbarUiTest {
         onNodeWithTag(LIST_TAG).performTouchInput {
             // Moving the thumb by half the track length: track = height - 2 * 8 dp - 40 dp.
             val halfTrack = (height - 56.dp.toPx()) / 2f
-            val start = thumbAtTop()
-            drag(start, start + Offset(0f, halfTrack))
+            grabAndMove(thumbAtTop(), halfTrack)
         }
         waitForIdle()
         assertTrue(state.firstVisibleItemIndex in 4_900..5_100, "landed at ${state.firstVisibleItemIndex}")
@@ -400,7 +412,7 @@ class ScrollbarUiTest {
             val track = height - 56.dp.toPx()
             val thumbCenter = Offset(right - 10f, bottom - 28.dp.toPx() - track * 0.2f)
             expectedIndex = 3_000
-            drag(thumbCenter, thumbCenter + Offset(0f, -track * 0.1f))
+            grabAndMove(thumbCenter, -track * 0.1f)
         }
         waitForIdle()
         val landed = state.firstVisibleItemIndex
