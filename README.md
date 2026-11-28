@@ -30,7 +30,7 @@ https://github.com/user-attachments/assets/8f0c4779-44e3-4107-b11b-78473a625502
 - **Infinite feeds and chats:** `hasMore`, reversed lists, and pages that load mid-drag.
 - **Make it yours:** colors, sizes, your own icon as the thumb, and an optional visible track.
 - **Native on each platform:** capsule on Android, thin bar on iOS, and on desktop a proportional bar with hover and click-to-jump, always visible on Windows and Linux like the system's own.
-- **Edge-safe:** stays clear of Android gesture zones, and supports `contentPadding` and RTL.
+- **Edge-safe:** stays clear of system bars, display cutouts and Android gesture zones, and supports `contentPadding` and RTL.
 - **Zero recompositions** while scrolling or dragging.
 
 ## Installation
@@ -38,7 +38,7 @@ https://github.com/user-attachments/assets/8f0c4779-44e3-4107-b11b-78473a625502
 ```kotlin
 // commonMain, or your app module in a plain Android project
 dependencies {
-    implementation("io.github.amaanprobably:compose-fast-scrollbar:0.2.1")
+    implementation("io.github.amaanprobably:compose-fast-scrollbar:0.2.2")
 }
 ```
 

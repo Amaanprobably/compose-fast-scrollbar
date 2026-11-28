@@ -32,7 +32,7 @@ Add the dependency to `commonMain` (or to your app module in a plain Android pro
 
 ```kotlin
 dependencies {
-    implementation("io.github.amaanprobably:compose-fast-scrollbar:0.2.1")
+    implementation("io.github.amaanprobably:compose-fast-scrollbar:0.2.2")
 }
 ```
 
@@ -283,6 +283,8 @@ LazyColumn(
     modifier = Modifier.scrollbar(listState, contentPadding = insets),
 ) { /* ... */ }
 ```
+
+The bar itself stays clear of the system bars and display cutouts on every side, even where you don't pass the insets. In landscape, a bar next to a navigation bar at the side of the screen sits beside it, not under it. Passing the insets is still what keeps your items out from under the bars.
 
 ### Gesture navigation
 

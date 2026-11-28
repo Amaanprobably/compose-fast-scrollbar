@@ -12,7 +12,10 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.stopScroll
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.mandatorySystemGestures
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.runtime.Composable
@@ -33,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -73,6 +77,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -612,7 +617,9 @@ internal val DefaultScrollbarStyle: ScrollbarStyle = ScrollbarDefaults.style()
  *
  * @param contentPadding Pass the same padding the list uses (including system insets) so the
  * track stays inside it. Only the padding along the scroll axis is applied; use
- * [ScrollbarStyle.edgePadding] to move the bar away from the cross-axis edge.
+ * [ScrollbarStyle.edgePadding] to move the bar away from the cross-axis edge. The bar keeps clear
+ * of system bars and display cutouts on its own, on every side, even when the list draws behind
+ * them.
  * @param hasMore Set to `true` for feeds that load more items as you scroll. While it is `true`
  * the thumb stops short of the very end, because the list is not really finished. When it
  * becomes `false` the thumb glides to the end. Leave it `false` for lists with a known size.
@@ -1195,17 +1202,38 @@ internal class GestureZoneOverlap {
     var bottom = 0f
 }
 
-/** Overlap of a list starting at [listTop] with a top gesture zone [zoneHeight] tall. */
-internal fun topGestureZoneOverlap(listTop: Float, listHeight: Float, zoneHeight: Float): Float =
-    (zoneHeight - listTop).coerceIn(0f, listHeight.coerceAtLeast(0f))
+/**
+ * How much of the list overlaps the system bars and display cutouts on each side, in pixels: the
+ * status bar, a navigation bar (at the side in landscape), a notch. Only more than zero when the
+ * list draws behind them. Updated after layout.
+ */
+internal class SystemBarOverlap {
+    var left = 0f
+    var top = 0f
+    var right = 0f
+    var bottom = 0f
+}
 
-/** Overlap of a list with a bottom gesture zone [zoneHeight] tall, at the bottom of the window. */
-internal fun bottomGestureZoneOverlap(
-    listTop: Float,
-    listHeight: Float,
-    rootHeight: Float,
-    zoneHeight: Float,
-): Float = (listTop + listHeight - (rootHeight - zoneHeight)).coerceIn(0f, listHeight.coerceAtLeast(0f))
+/**
+ * Overlap of a list starting at [listStart] (from the window's left or top) with an inset
+ * [insetLength] deep along that window edge. Works the same along either axis.
+ */
+internal fun overlapWithStartInset(listStart: Float, listLength: Float, insetLength: Float): Float =
+    (insetLength - listStart).coerceIn(0f, listLength.coerceAtLeast(0f))
+
+/**
+ * Overlap of a list with an inset [insetLength] deep along the window's right or bottom edge. None
+ * while the window's size isn't known yet.
+ */
+internal fun overlapWithEndInset(
+    listStart: Float,
+    listLength: Float,
+    windowLength: Float,
+    insetLength: Float,
+): Float = when {
+    windowLength <= 0f -> 0f
+    else -> (listStart + listLength - (windowLength - insetLength)).coerceIn(0f, listLength.coerceAtLeast(0f))
+}
 
 // CONTROLLER AND CONFIG
 
@@ -1296,8 +1324,17 @@ private class ScrollbarController(
     /** Where the list sits in the Compose root, for system gesture exclusion. Set after layout. */
     var positionInRoot = Offset.Zero
 
+    /**
+     * Where the list sits in the window, for the inset overlaps. Set after layout. State, so the
+     * draw, which works the overlaps out from it, runs again when the list moves.
+     */
+    var boundsInWindow by mutableStateOf(Rect.Zero)
+
     /** Overlap with the top and bottom system gesture zones. Set after layout. */
     val gestureZones = GestureZoneOverlap()
+
+    /** Overlap with the system bars and display cutouts on each side. Set after layout. */
+    val systemBars = SystemBarOverlap()
 
     // The area currently protected from system edge gestures, in list coordinates (NaN = none).
     private var guardedMainStart = Float.NaN
@@ -1712,6 +1749,7 @@ internal class ScrollbarConfig(
     val hasMore: Boolean,
     val onEdgeChange: ((ScrollbarEdge) -> Unit)?,
     val gestureZones: GestureZoneOverlap = GestureZoneOverlap(),
+    val systemBars: SystemBarOverlap = SystemBarOverlap(),
 ) {
     /** Largest thumb progress. Below 1 while more items can still load. */
     val endCap: Float get() = if (hasMore) HAS_MORE_END_CAP else 1f
@@ -1745,17 +1783,20 @@ internal class ScrollbarConfig(
         }
 
     /**
-     * Where the track starts, in pixels: past the content padding and, for vertical lists, past
-     * the top system gesture zone. The larger of the two is used, not the sum, so passing the
-     * system insets as content padding doesn't push the track in twice.
+     * Where the track starts, in pixels: past the content padding and past whatever covers the
+     * list at that end (the top system gesture zone, a system bar, a cutout). The larger is used,
+     * not the sum, so passing the system insets as content padding doesn't push the track in twice.
      */
     fun mainAxisStartPaddingPx(density: Density, isVertical: Boolean): Float = with(density) {
         val content = (
                 if (isVertical) contentPadding.calculateTopPadding()
                 else contentPadding.calculateLeftPadding(layoutDirection)
                 ).toPx()
-        val zone = if (isVertical) gestureZones.top else 0f
-        max(content, zone) + thumbEndPadding.toPx()
+        val covered = when {
+            isVertical -> max(gestureZones.top, systemBars.top)
+            else -> systemBars.left
+        }
+        max(content, covered) + thumbEndPadding.toPx()
     }
 
     /** Where the track ends: the same rule at the bottom (or right). */
@@ -1764,19 +1805,27 @@ internal class ScrollbarConfig(
                 if (isVertical) contentPadding.calculateBottomPadding()
                 else contentPadding.calculateRightPadding(layoutDirection)
                 ).toPx()
-        val zone = if (isVertical) gestureZones.bottom else 0f
-        max(content, zone) + thumbEndPadding.toPx()
+        val covered = when {
+            isVertical -> max(gestureZones.bottom, systemBars.bottom)
+            else -> systemBars.right
+        }
+        max(content, covered) + thumbEndPadding.toPx()
     }
 
     /**
-     * Lifts a horizontal bar out of the top or bottom system gesture zone, so grabbing it can't
-     * trigger Android's home swipe. Vertical bars sit at the side edges, where the edge guard
-     * handles the back gesture instead.
+     * Moves the bar off whatever covers the list at its edge: a system bar or a cutout (a
+     * navigation bar at the side in landscape, for example), and for a horizontal bar also the top
+     * or bottom system gesture zone, so grabbing it can't trigger Android's home swipe. At a side
+     * edge the edge guard handles the back gesture instead.
      */
-    fun crossZoneInsetPx(isVertical: Boolean): Float = when {
-        isVertical -> 0f
-        isCrossAxisAtOrigin(isVertical = false) -> gestureZones.top
-        else -> gestureZones.bottom
+    fun crossZoneInsetPx(isVertical: Boolean): Float {
+        val atOrigin = isCrossAxisAtOrigin(isVertical)
+        return when {
+            isVertical && atOrigin -> systemBars.left
+            isVertical -> systemBars.right
+            atOrigin -> max(gestureZones.top, systemBars.top)
+            else -> max(gestureZones.bottom, systemBars.bottom)
+        }
     }
 }
 
@@ -1967,6 +2016,7 @@ private fun Modifier.scrollbarFor(
     val config = ScrollbarConfig(
         style, contentPadding, minItemsToShow, edge, layoutDirection, label, hasMore, onEdgeChange,
         gestureZones = controller.gestureZones,
+        systemBars = controller.systemBars,
     )
     val latestConfig by rememberUpdatedState(config)
 
@@ -1974,6 +2024,9 @@ private fun Modifier.scrollbarFor(
     val edgeGuard = rememberEdgeGestureGuard()
     // Where the system's gestures always win (Android's home swipe, for example).
     val gestureInsets = WindowInsets.mandatorySystemGestures
+    // What covers the screen's edges: status and navigation bars, cutouts. Zero unless the list
+    // draws behind them.
+    val systemBarInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
     val density = LocalDensity.current
     val windowInfo = LocalWindowInfo.current
 
@@ -2418,25 +2471,54 @@ private fun Modifier.scrollbarFor(
         )
         if (actions.isEmpty()) Modifier else Modifier.semantics { customActions = actions }
     }
-    // After layout: where the list sits (for the edge guard) and how much of it overlaps the top
-    // and bottom system gesture zones (to keep the track out of them).
-    // Insets are measured from the window's edges, so the overlap uses the list's position in the
-    // window (a Compose view may not start at the top of the window). The edge guard uses the
-    // position in the Compose root instead, because that's the hosting view's coordinate space.
+    // After layout: where the list sits, in the Compose root for the edge guard (the hosting
+    // view's coordinate space) and in the window for the inset overlaps (insets are measured from
+    // the window's edges, and a Compose view may not start at the top of the window).
     val positionModifier = Modifier.onGloballyPositioned { coordinates ->
         controller.positionInRoot = coordinates.positionInRoot()
-        val listTop = coordinates.positionInWindow().y
-        val listHeight = coordinates.size.height.toFloat()
-        controller.gestureZones.top = topGestureZoneOverlap(
-            listTop = listTop,
-            listHeight = listHeight,
-            zoneHeight = gestureInsets.getTop(density).toFloat(),
+        controller.boundsInWindow = Rect(coordinates.positionInWindow(), coordinates.size.toSize())
+    }
+
+    // How much of the list the gesture zones, system bars and cutouts cover, to keep the bar out
+    // of them. Worked out on every draw from live values, not once after layout: the window's size
+    // and the insets can change while the list stays put (a rotation, insets that arrive a frame
+    // late), and because the draw reads them, it runs again whenever they do.
+    fun refreshInsetOverlaps() {
+        val bounds = controller.boundsInWindow
+        val windowWidth = windowInfo.containerSize.width.toFloat()
+        val windowHeight = windowInfo.containerSize.height.toFloat()
+        controller.gestureZones.top = overlapWithStartInset(
+            listStart = bounds.top,
+            listLength = bounds.height,
+            insetLength = gestureInsets.getTop(density).toFloat(),
         )
-        controller.gestureZones.bottom = bottomGestureZoneOverlap(
-            listTop = listTop,
-            listHeight = listHeight,
-            rootHeight = windowInfo.containerSize.height.toFloat(),
-            zoneHeight = gestureInsets.getBottom(density).toFloat(),
+        controller.gestureZones.bottom = overlapWithEndInset(
+            listStart = bounds.top,
+            listLength = bounds.height,
+            windowLength = windowHeight,
+            insetLength = gestureInsets.getBottom(density).toFloat(),
+        )
+        controller.systemBars.left = overlapWithStartInset(
+            listStart = bounds.left,
+            listLength = bounds.width,
+            insetLength = systemBarInsets.getLeft(density, layoutDirection).toFloat(),
+        )
+        controller.systemBars.top = overlapWithStartInset(
+            listStart = bounds.top,
+            listLength = bounds.height,
+            insetLength = systemBarInsets.getTop(density).toFloat(),
+        )
+        controller.systemBars.right = overlapWithEndInset(
+            listStart = bounds.left,
+            listLength = bounds.width,
+            windowLength = windowWidth,
+            insetLength = systemBarInsets.getRight(density, layoutDirection).toFloat(),
+        )
+        controller.systemBars.bottom = overlapWithEndInset(
+            listStart = bounds.top,
+            listLength = bounds.height,
+            windowLength = windowHeight,
+            insetLength = systemBarInsets.getBottom(density).toFloat(),
         )
     }
 
@@ -2447,6 +2529,8 @@ private fun Modifier.scrollbarFor(
         .then(hoverModifier)
         .drawWithContent {
             drawContent()
+            // First, before anything can return early, so the draw always observes these.
+            refreshInsetOverlaps()
 
             val isVertical = target.isVertical
             val isMirrored = config.isMirrored(target)

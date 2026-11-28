@@ -32,6 +32,10 @@ private fun config(
     contentPadding: PaddingValues = PaddingValues(0.dp),
     zoneTop: Float = 0f,
     zoneBottom: Float = 0f,
+    barLeft: Float = 0f,
+    barTop: Float = 0f,
+    barRight: Float = 0f,
+    barBottom: Float = 0f,
 ) = ScrollbarConfig(
     style = style,
     contentPadding = contentPadding,
@@ -44,6 +48,12 @@ private fun config(
     gestureZones = GestureZoneOverlap().apply {
         top = zoneTop
         bottom = zoneBottom
+    },
+    systemBars = SystemBarOverlap().apply {
+        left = barLeft
+        top = barTop
+        right = barRight
+        bottom = barBottom
     },
 )
 
@@ -174,28 +184,45 @@ class CenteredProgressTest {
     }
 }
 
-class GestureZoneOverlapTest {
+class InsetOverlapTest {
     @Test
     fun listTouchingTheBottomOverlapsTheBottomZone() {
-        // Root 800 tall, zone 32 at the bottom, list from 100 to 800.
-        assertEquals(32f, bottomGestureZoneOverlap(listTop = 100f, listHeight = 700f, rootHeight = 800f, zoneHeight = 32f))
+        // Window 800 tall, zone 32 at the bottom, list from 100 to 800.
+        assertEquals(32f, overlapWithEndInset(listStart = 100f, listLength = 700f, windowLength = 800f, insetLength = 32f))
     }
 
     @Test
     fun listAboveTheZoneDoesNotOverlap() {
-        assertEquals(0f, bottomGestureZoneOverlap(listTop = 100f, listHeight = 600f, rootHeight = 800f, zoneHeight = 32f))
+        assertEquals(0f, overlapWithEndInset(listStart = 100f, listLength = 600f, windowLength = 800f, insetLength = 32f))
     }
 
     @Test
     fun listUnderTheTopZoneOverlapsIt() {
-        assertEquals(24f, topGestureZoneOverlap(listTop = 0f, listHeight = 500f, zoneHeight = 24f))
-        assertEquals(0f, topGestureZoneOverlap(listTop = 60f, listHeight = 500f, zoneHeight = 24f))
+        assertEquals(24f, overlapWithStartInset(listStart = 0f, listLength = 500f, insetLength = 24f))
+        assertEquals(0f, overlapWithStartInset(listStart = 60f, listLength = 500f, insetLength = 24f))
     }
 
     @Test
     fun overlapNeverExceedsTheList() {
-        assertEquals(10f, bottomGestureZoneOverlap(listTop = 790f, listHeight = 10f, rootHeight = 800f, zoneHeight = 32f))
-        assertEquals(10f, topGestureZoneOverlap(listTop = 0f, listHeight = 10f, zoneHeight = 24f))
+        assertEquals(10f, overlapWithEndInset(listStart = 790f, listLength = 10f, windowLength = 800f, insetLength = 32f))
+        assertEquals(10f, overlapWithStartInset(listStart = 0f, listLength = 10f, insetLength = 24f))
+    }
+
+    @Test
+    fun aListUnderASideNavigationBarOverlapsIt() {
+        // Landscape, window 2,000 wide, a 120 px navigation bar on the right. A list across the
+        // whole width runs under it; one that stops where the bar starts doesn't.
+        assertEquals(120f, overlapWithEndInset(listStart = 0f, listLength = 2_000f, windowLength = 2_000f, insetLength = 120f))
+        assertEquals(0f, overlapWithEndInset(listStart = 0f, listLength = 1_880f, windowLength = 2_000f, insetLength = 120f))
+        // A cutout on the left, and a list that starts partway under it.
+        assertEquals(40f, overlapWithStartInset(listStart = 60f, listLength = 1_000f, insetLength = 100f))
+    }
+
+    @Test
+    fun anUnknownWindowSizeCoversNothing() {
+        // Before the window has a size, the whole list would look covered and the bar would land
+        // in the middle of the screen.
+        assertEquals(0f, overlapWithEndInset(listStart = 0f, listLength = 2_000f, windowLength = 0f, insetLength = 120f))
     }
 }
 
@@ -236,6 +263,58 @@ class GestureZonePaddingTest {
     @Test
     fun verticalBarsIgnoreTheZonesAcrossTheAxis() {
         assertEquals(0f, config(zoneTop = 24f, zoneBottom = 48f).crossZoneInsetPx(isVertical = true))
+    }
+}
+
+class SystemBarPaddingTest {
+    private val bar = ScrollbarDefaults.style(thumbAppearance = ThumbAppearance.Bar, trackPadding = 8.dp)
+
+    @Test
+    fun aVerticalBarSitsBesideASideNavigationBar() {
+        // A list drawn behind a 120 px navigation bar on the right, like in landscape.
+        val config = config(barRight = 120f)
+        assertEquals(120f, config.crossZoneInsetPx(isVertical = true))
+        // Resting thumb: 400 - 32 (capsule) - 4 (edge padding) - 120 (navigation bar) = 244.
+        assertEquals(244f, with(testDensity) { restingCrossStart(config, true, 400f, 32f) })
+        // The 48 px strip moves with it: 400 - 120 - 48 = 232.
+        assertTrue(inStrip(config, isVertical = true, crossLength = 400f, cross = 232f))
+        assertFalse(inStrip(config, isVertical = true, crossLength = 400f, cross = 231f))
+    }
+
+    @Test
+    fun onlyTheSideTheBarIsOnCounts() {
+        // A cutout on the left doesn't move a bar on the right, and the other way round.
+        assertEquals(0f, config(edge = ScrollbarEdge.End, barLeft = 90f).crossZoneInsetPx(isVertical = true))
+        assertEquals(90f, config(edge = ScrollbarEdge.Start, barLeft = 90f).crossZoneInsetPx(isVertical = true))
+        // In RTL the end edge is the left side.
+        val rtl = config(edge = ScrollbarEdge.End, layoutDirection = LayoutDirection.Rtl, barLeft = 90f)
+        assertEquals(90f, rtl.crossZoneInsetPx(isVertical = true))
+    }
+
+    @Test
+    fun aHorizontalBarTakesTheLargerOfTheGestureZoneAndTheSystemBar() {
+        // A 3-button navigation bar has no gesture zone but still covers the bottom.
+        assertEquals(96f, config(barBottom = 96f).crossZoneInsetPx(isVertical = false))
+        assertEquals(96f, config(zoneBottom = 60f, barBottom = 96f).crossZoneInsetPx(isVertical = false))
+        assertEquals(60f, config(zoneBottom = 60f, barBottom = 40f).crossZoneInsetPx(isVertical = false))
+    }
+
+    @Test
+    fun theTrackStaysOutOfSystemBarsAtItsEnds() {
+        // Vertical: the status bar at the top, a 3-button navigation bar at the bottom.
+        val vertical = config(style = bar, barTop = 50f, barBottom = 96f)
+        assertEquals(50f + 8f, vertical.mainAxisStartPaddingPx(testDensity, isVertical = true))
+        assertEquals(96f + 8f, vertical.mainAxisEndPaddingPx(testDensity, isVertical = true))
+        // Horizontal: a navigation bar on the right in landscape.
+        val horizontal = config(style = bar, barRight = 120f)
+        assertEquals(8f, horizontal.mainAxisStartPaddingPx(testDensity, isVertical = false))
+        assertEquals(120f + 8f, horizontal.mainAxisEndPaddingPx(testDensity, isVertical = false))
+    }
+
+    @Test
+    fun insetsPassedAsPaddingAreNotCountedTwice() {
+        val config = config(style = bar, contentPadding = PaddingValues(bottom = 96.dp), barBottom = 96f)
+        assertEquals(96f + 8f, config.mainAxisEndPaddingPx(testDensity, isVertical = true))
     }
 }
 

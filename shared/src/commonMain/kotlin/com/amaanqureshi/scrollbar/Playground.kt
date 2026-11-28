@@ -8,11 +8,18 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeContentPadding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -41,6 +48,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import io.github.amaanprobably.scrollbar.ScrollbarDefaults
@@ -97,6 +105,11 @@ internal fun PlaygroundScreen(onBack: () -> Unit) {
     // edges (the back gesture zones) and runs under the gesture bar. Off, safeContentPadding()
     // pads every side by the gesture zones too, which keeps the bar away from the back gesture.
     var edgeToEdge by rememberSaveable { mutableStateOf(true) }
+    // Like StreetComplete's settings lists: the list still draws behind the side and bottom bars,
+    // and only its items are padded clear of them, through contentPadding. Rotate to landscape with
+    // 3-button navigation: the bar should sit beside the navigation bar, not under it. With
+    // edge-to-edge off, safeContentPadding() already keeps the whole list clear, so it does nothing.
+    var insetPadding by rememberSaveable { mutableStateOf(false) }
     // Long-press the thumb and drag it across to move the bar. A real app would persist this.
     var edge by rememberSaveable { mutableStateOf(ScrollbarEdge.End) }
     val onEdgeChange: (ScrollbarEdge) -> Unit = { edge = it }
@@ -130,6 +143,7 @@ internal fun PlaygroundScreen(onBack: () -> Unit) {
                 barLook = barLook, onBarLook = { barLook = it },
                 shortContainer = shortContainer, onShortContainer = { shortContainer = it },
                 edgeToEdge = edgeToEdge, onEdgeToEdge = { edgeToEdge = it },
+                insetPadding = insetPadding, onInsetPadding = { insetPadding = it },
             )
             Spacer(Modifier.height(8.dp))
 
@@ -139,10 +153,11 @@ internal fun PlaygroundScreen(onBack: () -> Unit) {
                     .fillMaxWidth()
                     .then(if (shortContainer) Modifier.height(160.dp) else Modifier.weight(1f))
 
+                val insets = insetPadding && edgeToEdge
                 when (demo) {
-                    Demo.Column -> ColumnDemo(itemCount, reverseLayout, withPadding, style, label, edge, onEdgeChange, demoModifier)
-                    Demo.Grid -> GridDemo(itemCount, reverseLayout, withPadding, style, label, edge, onEdgeChange, demoModifier)
-                    Demo.Row -> RowDemo(itemCount, reverseLayout, withPadding, style, label, edge, onEdgeChange, demoModifier)
+                    Demo.Column -> ColumnDemo(itemCount, reverseLayout, withPadding, insets, style, label, edge, onEdgeChange, demoModifier)
+                    Demo.Grid -> GridDemo(itemCount, reverseLayout, withPadding, insets, style, label, edge, onEdgeChange, demoModifier)
+                    Demo.Row -> RowDemo(itemCount, reverseLayout, withPadding, insets, style, label, edge, onEdgeChange, demoModifier)
                     Demo.Feed -> FeedDemo(reverseLayout, style, labelStyle, edge, onEdgeChange, demoModifier)
                     Demo.InsertAtTop -> InsertAtTopDemo(style, labelStyle, edge, onEdgeChange, demoModifier)
                     Demo.TwoLists -> TwoListsDemo(style, edge, onEdgeChange, demoModifier)
@@ -165,6 +180,7 @@ private fun Controls(
     barLook: Boolean, onBarLook: (Boolean) -> Unit,
     shortContainer: Boolean, onShortContainer: (Boolean) -> Unit,
     edgeToEdge: Boolean, onEdgeToEdge: (Boolean) -> Unit,
+    insetPadding: Boolean, onInsetPadding: (Boolean) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         ChipRow {
@@ -186,6 +202,7 @@ private fun Controls(
             Chip(selected = barLook, text = "Bar", onClick = { onBarLook(!barLook) })
             Chip(selected = shortContainer, text = "Short", onClick = { onShortContainer(!shortContainer) })
             Chip(selected = edgeToEdge, text = "Edge-to-edge", onClick = { onEdgeToEdge(!edgeToEdge) })
+            Chip(selected = insetPadding, text = "Insets", onClick = { onInsetPadding(!insetPadding) })
         }
     }
 }
@@ -213,6 +230,29 @@ private fun ChipRow(content: @Composable () -> Unit) {
     ) { content() }
 }
 
+/**
+ * The demo lists' content padding: 48dp at both ends of the scroll axis with "Padding", plus the
+ * side and bottom system bars with "Insets", the way an edge-to-edge screen keeps its items clear
+ * of them.
+ */
+@Composable
+private fun demoPadding(withPadding: Boolean, insets: Boolean, isVertical: Boolean): PaddingValues {
+    val layoutDirection = LocalLayoutDirection.current
+    val system = when {
+        insets -> WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom).asPaddingValues()
+        else -> PaddingValues(0.dp)
+    }
+    val alongTheAxis: Dp = if (withPadding) 48.dp else 0.dp
+    val alongVertical = if (isVertical) alongTheAxis else 0.dp
+    val alongHorizontal = if (isVertical) 0.dp else alongTheAxis
+    return PaddingValues(
+        start = system.calculateStartPadding(layoutDirection) + alongHorizontal,
+        top = system.calculateTopPadding() + alongVertical,
+        end = system.calculateEndPadding(layoutDirection) + alongHorizontal,
+        bottom = system.calculateBottomPadding() + alongVertical,
+    )
+}
+
 @Composable
 private fun Cell(text: String, modifier: Modifier) {
     Box(
@@ -231,6 +271,7 @@ private fun ColumnDemo(
     itemCount: Int,
     reverseLayout: Boolean,
     withPadding: Boolean,
+    insets: Boolean,
     style: ScrollbarStyle,
     label: ScrollbarLabel?,
     edge: ScrollbarEdge,
@@ -238,7 +279,7 @@ private fun ColumnDemo(
     modifier: Modifier,
 ) {
     val listState = rememberLazyListState()
-    val padding = if (withPadding) PaddingValues(vertical = 48.dp) else PaddingValues(0.dp)
+    val padding = demoPadding(withPadding, insets, isVertical = true)
     LazyColumn(
         state = listState,
         reverseLayout = reverseLayout,
@@ -262,6 +303,7 @@ private fun GridDemo(
     itemCount: Int,
     reverseLayout: Boolean,
     withPadding: Boolean,
+    insets: Boolean,
     style: ScrollbarStyle,
     label: ScrollbarLabel?,
     edge: ScrollbarEdge,
@@ -269,7 +311,7 @@ private fun GridDemo(
     modifier: Modifier,
 ) {
     val gridState = rememberLazyGridState()
-    val padding = if (withPadding) PaddingValues(vertical = 48.dp) else PaddingValues(0.dp)
+    val padding = demoPadding(withPadding, insets, isVertical = true)
     LazyVerticalGrid(
         columns = GridCells.Fixed(3),
         state = gridState,
@@ -301,6 +343,7 @@ private fun RowDemo(
     itemCount: Int,
     reverseLayout: Boolean,
     withPadding: Boolean,
+    insets: Boolean,
     style: ScrollbarStyle,
     label: ScrollbarLabel?,
     edge: ScrollbarEdge,
@@ -308,7 +351,7 @@ private fun RowDemo(
     modifier: Modifier,
 ) {
     val listState = rememberLazyListState()
-    val padding = if (withPadding) PaddingValues(horizontal = 48.dp) else PaddingValues(0.dp)
+    val padding = demoPadding(withPadding, insets, isVertical = false)
     LazyRow(
         state = listState,
         reverseLayout = reverseLayout,

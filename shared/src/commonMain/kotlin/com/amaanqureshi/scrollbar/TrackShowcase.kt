@@ -98,7 +98,9 @@ internal fun TrackScreen(onBack: () -> Unit) {
             },
         )
     }
-    val padding = PaddingValues(start = 16.dp, end = 64.dp, top = 4.dp, bottom = navigationBarBottom() + 16.dp)
+    // Room for the ladder at the end, past a navigation bar in landscape: the bar stays clear of
+    // it, so the cards have to as well.
+    val padding = PaddingValues(start = 16.dp, end = safeDrawingEnd() + 64.dp, top = 4.dp, bottom = navigationBarBottom() + 16.dp)
 
     DemoScreen(Showcase.Track, onBack) {
         Row(
