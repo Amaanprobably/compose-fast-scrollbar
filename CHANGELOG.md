@@ -10,6 +10,7 @@ All notable changes to this project are documented here. The project follows
 
 ### Fixed
 - The bar stays clear of the system bars and display cutouts on every side when the list draws behind them, like it already did for the gesture zones. In landscape it no longer sits under a navigation bar at the side of the screen, and a horizontal bar is lifted above a 3-button navigation bar. Lists that are already padded clear of the bars don't change.
+- A list that runs past the window's edge (a pager page mid-swipe, a list partly scrolled away in a scrolling parent) keeps its bar in place, instead of pinning it to the window's edge or squeezing the track into the visible part.
 
 ## 0.2.1 (2026-11-26)
 
