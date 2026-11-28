@@ -1195,7 +1195,7 @@ internal fun guardSpanEnd(thumbEnd: Float, slack: Float, containerLength: Float)
 
 /**
  * How much of the list overlaps the screen's top and bottom system gesture zones (where the
- * system's gestures always win, like Android's home swipe), in pixels. Updated after layout.
+ * system's gestures always win, like Android's home swipe), in pixels. Updated on every draw.
  */
 internal class GestureZoneOverlap {
     var top = 0f
@@ -1205,7 +1205,7 @@ internal class GestureZoneOverlap {
 /**
  * How much of the list overlaps the system bars and display cutouts on each side, in pixels: the
  * status bar, a navigation bar (at the side in landscape), a notch. Only more than zero when the
- * list draws behind them. Updated after layout.
+ * list draws behind them. Updated on every draw.
  */
 internal class SystemBarOverlap {
     var left = 0f
@@ -1216,14 +1216,17 @@ internal class SystemBarOverlap {
 
 /**
  * Overlap of a list starting at [listStart] (from the window's left or top) with an inset
- * [insetLength] deep along that window edge. Works the same along either axis.
+ * [insetLength] deep along that window edge. Works the same along either axis. Never more than
+ * the inset: a list that runs past the window's edge (a pager page sliding in, a list partly
+ * scrolled away in a scrolling parent) keeps its bar where it would be, instead of following the
+ * window's edge.
  */
 internal fun overlapWithStartInset(listStart: Float, listLength: Float, insetLength: Float): Float =
-    (insetLength - listStart).coerceIn(0f, listLength.coerceAtLeast(0f))
+    (insetLength - listStart).coerceIn(0f, min(listLength, insetLength).coerceAtLeast(0f))
 
 /**
- * Overlap of a list with an inset [insetLength] deep along the window's right or bottom edge. None
- * while the window's size isn't known yet.
+ * Overlap of a list with an inset [insetLength] deep along the window's right or bottom edge, also
+ * never more than the inset. None while the window's size isn't known yet.
  */
 internal fun overlapWithEndInset(
     listStart: Float,
@@ -1232,7 +1235,8 @@ internal fun overlapWithEndInset(
     insetLength: Float,
 ): Float = when {
     windowLength <= 0f -> 0f
-    else -> (listStart + listLength - (windowLength - insetLength)).coerceIn(0f, listLength.coerceAtLeast(0f))
+    else -> (listStart + listLength - (windowLength - insetLength))
+        .coerceIn(0f, min(listLength, insetLength).coerceAtLeast(0f))
 }
 
 // CONTROLLER AND CONFIG
@@ -1330,10 +1334,10 @@ private class ScrollbarController(
      */
     var boundsInWindow by mutableStateOf(Rect.Zero)
 
-    /** Overlap with the top and bottom system gesture zones. Set after layout. */
+    /** Overlap with the top and bottom system gesture zones. Worked out on every draw. */
     val gestureZones = GestureZoneOverlap()
 
-    /** Overlap with the system bars and display cutouts on each side. Set after layout. */
+    /** Overlap with the system bars and display cutouts on each side. Worked out on every draw. */
     val systemBars = SystemBarOverlap()
 
     // The area currently protected from system edge gestures, in list coordinates (NaN = none).

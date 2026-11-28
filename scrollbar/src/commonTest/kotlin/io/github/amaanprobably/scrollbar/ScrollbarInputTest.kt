@@ -219,6 +219,20 @@ class InsetOverlapTest {
     }
 
     @Test
+    fun aListPastTheWindowEdgeOverlapsOnlyTheInset() {
+        // A pager page halfway in from the right, window 1,000 wide, no side inset: the page
+        // isn't under anything, so its bar stays at the page's own edge.
+        assertEquals(0f, overlapWithEndInset(listStart = 500f, listLength = 1_000f, windowLength = 1_000f, insetLength = 0f))
+        // Same with a 120 px navigation bar on the right: the bar moves in by the inset, no more.
+        assertEquals(120f, overlapWithEndInset(listStart = 500f, listLength = 1_000f, windowLength = 1_000f, insetLength = 120f))
+        // A page halfway out to the left, and a list scrolled 300 px above the window's top.
+        assertEquals(0f, overlapWithStartInset(listStart = -500f, listLength = 1_000f, insetLength = 0f))
+        assertEquals(24f, overlapWithStartInset(listStart = -300f, listLength = 1_000f, insetLength = 24f))
+        // A list running 400 px below the window's bottom.
+        assertEquals(32f, overlapWithEndInset(listStart = 0f, listLength = 1_200f, windowLength = 800f, insetLength = 32f))
+    }
+
+    @Test
     fun anUnknownWindowSizeCoversNothing() {
         // Before the window has a size, the whole list would look covered and the bar would land
         // in the middle of the screen.
