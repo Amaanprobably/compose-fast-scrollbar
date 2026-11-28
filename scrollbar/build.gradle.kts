@@ -131,3 +131,12 @@ tasks.withType<Test>().matching { it.name == "testAndroidHostTest" }.configureEa
         excludeTestsMatching("io.github.amaanprobably.scrollbar.ScrollbarVisibilityTest")
     }
 }
+
+// The node rewrite benchmark isn't a real test and takes a while. It only runs with -Pbenchmark.
+tasks.withType<Test>().matching { it.name == "desktopTest" }.configureEach {
+    if (!providers.gradleProperty("benchmark").isPresent) {
+        filter {
+            excludeTestsMatching("io.github.amaanprobably.scrollbar.NodeRewriteBenchmark")
+        }
+    }
+}
