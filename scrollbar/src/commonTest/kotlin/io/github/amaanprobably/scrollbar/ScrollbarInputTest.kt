@@ -10,6 +10,7 @@ import androidx.compose.ui.unit.dp
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 private val testDensity = Density(1f) // 1 dp == 1 px
@@ -453,6 +454,51 @@ class MoveHintPlacementTest {
     }
 }
 
+class AutomaticThumbSizingTest {
+    @Test
+    fun lazyListsOnTouchScreensGetAFixedThumb() {
+        for (platform in listOf(Platform.Android, Platform.Ios)) {
+            val sizing = ThumbSizing.Automatic.resolvedFor(hasExactContentSize = false, platform = platform)
+            assertEquals(40.dp, (sizing as ThumbSizing.Fixed).length)
+        }
+    }
+
+    @Test
+    fun scrollStatesOnTouchScreensGetAProportionalThumb() {
+        // Their content size is exact, so the length never jitters.
+        for (platform in listOf(Platform.Android, Platform.Ios)) {
+            val sizing = ThumbSizing.Automatic.resolvedFor(hasExactContentSize = true, platform = platform)
+            assertTrue(sizing is ThumbSizing.Proportional && sizing.smoothed)
+            assertEquals(48.dp, sizing.minLength)
+        }
+    }
+
+    @Test
+    fun desktopIsProportionalEverywhere() {
+        for (exact in listOf(true, false)) {
+            val sizing = ThumbSizing.Automatic.resolvedFor(hasExactContentSize = exact, platform = Platform.Desktop)
+            assertEquals(24.dp, (sizing as ThumbSizing.Proportional).minLength)
+        }
+    }
+
+    @Test
+    fun aSizingYouPickIsKept() {
+        val fixed = ThumbSizing.Fixed(56.dp)
+        assertSame(fixed, fixed.resolvedFor(hasExactContentSize = true, platform = Platform.Android))
+        val proportional = ThumbSizing.Proportional(minLength = 32.dp)
+        assertSame(proportional, proportional.resolvedFor(hasExactContentSize = false, platform = Platform.Android))
+    }
+
+    @Test
+    fun aCustomStyleOnTouchScreensStillGetsAutomatic() {
+        // Leaving thumbSizing out of style(...) keeps the automatic choice, so a style that only
+        // changes colors still gets the proportional thumb on a scrollable Column.
+        val custom = ScrollbarDefaults.style(thumbColor = Color.Red)
+        if (currentPlatform != Platform.Desktop) assertEquals(ThumbSizing.Automatic, custom.thumbSizing)
+        assertTrue(config(style = custom).thumbSizing !is ThumbSizing.Automatic, "the config holds the resolved sizing")
+    }
+}
+
 class StyleDefaultsTest {
     @Test
     fun fixedThumbDefaultsTo40Dp() = assertEquals(40.dp, ThumbSizing.Fixed().length)
@@ -528,7 +574,7 @@ class StyleDefaultsTest {
         val sizing = ScrollbarDefaults.style().thumbSizing
         when (currentPlatform) {
             Platform.Desktop -> assertTrue(sizing is ThumbSizing.Proportional && sizing.smoothed && sizing.minLength == 24.dp)
-            Platform.Android, Platform.Ios -> assertEquals(40.dp, (sizing as ThumbSizing.Fixed).length)
+            Platform.Android, Platform.Ios -> assertEquals(ThumbSizing.Automatic, sizing)
         }
         assertTrue(ScrollbarDefaults.compactStyle().thumbSizing is ThumbSizing.Proportional)
     }

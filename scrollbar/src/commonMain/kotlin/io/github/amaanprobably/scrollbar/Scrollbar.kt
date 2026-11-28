@@ -114,12 +114,21 @@ public enum class ScrollbarEdge { Start, End }
  * How the thumb's length is chosen.
  *
  * Lazy lists don't know their true content size, so a proportional thumb can't be fully stable
- * on variable-height content. [Fixed] sidesteps that and is the default on touch screens, like the
- * platform fast scrollers. Desktop defaults to a smoothed [Proportional] thumb, like system
- * scrollbars.
+ * on variable-height content. [Fixed] sidesteps that, like the platform fast scrollers. A scroll
+ * state knows its exact size, so a proportional thumb there never jitters. [Automatic], the
+ * default on touch screens, picks between the two. Desktop defaults to a smoothed [Proportional]
+ * thumb, like system scrollbars.
  */
 @Immutable
 public sealed interface ThumbSizing {
+    /**
+     * Picks for the scrollable: a fixed 40dp thumb for lazy lists and grids on touch screens, and
+     * a [Proportional] one for scrollable Columns and Rows, whose exact size is known, like
+     * Android's own ScrollView. On desktop it's proportional everywhere, with a 24dp minimum. The
+     * default on touch screens, so a style of your own gets it too unless it sets `thumbSizing`.
+     */
+    public data object Automatic : ThumbSizing
+
     /** Constant length regardless of content size. */
     @Immutable
     public class Fixed(public val length: Dp = 40.dp) : ThumbSizing {
@@ -412,7 +421,7 @@ internal val AndroidDefaults = StyleDefaults(
     thumbThickness = 5.dp,
     pressedThumbThickness = 8.dp,
     thumbLength = 40.dp,
-    thumbSizing = ThumbSizing.Fixed(40.dp),
+    thumbSizing = ThumbSizing.Automatic,
     touchTargetThickness = 48.dp,
     trackPadding = 2.dp, // close to the ends, like Android's own scrollbars, without touching them
     edgePadding = 4.dp,
@@ -429,7 +438,7 @@ internal val IosDefaults = StyleDefaults(
     thumbThickness = 3.dp,
     pressedThumbThickness = 8.dp,
     thumbLength = 40.dp,
-    thumbSizing = ThumbSizing.Fixed(40.dp),
+    thumbSizing = ThumbSizing.Automatic,
     touchTargetThickness = 48.dp,
     trackPadding = 3.dp, // 3pt from the ends, like the system scroll indicator
     edgePadding = 3.dp,
@@ -472,7 +481,9 @@ public object ScrollbarDefaults {
      *
      * Visibility follows the system's own scrollbars too: [ScrollbarVisibility.Always] on Windows
      * and Linux, [ScrollbarVisibility.AutoHide] on Android, iOS and macOS. On desktop the thumb is
-     * [ThumbSizing.Proportional], like system scrollbars; on touch screens it's a fixed 40dp handle.
+     * [ThumbSizing.Proportional], like system scrollbars. On touch screens it's
+     * [ThumbSizing.Automatic]: a fixed 40dp handle on lazy lists, proportional on scrollable
+     * Columns and Rows.
      *
      * The default `trackPadding` keeps the bar close to the ends of the track, like the system's
      * own scrollbars: 2dp on Android and desktop, 3dp on iOS. The capsule and an icon keep at
@@ -699,7 +710,8 @@ public fun Modifier.scrollbar(
  * ) { ... }
  * ```
  *
- * Positions are exact, because a scroll state knows the full size of its content.
+ * Positions are exact, because a scroll state knows the full size of its content. For the same
+ * reason [ThumbSizing.Automatic], the default, gives it a proportional thumb on touch screens too.
  *
  * @param label Shows a bubble next to the thumb while it is dragged. Its lambda gets the scroll
  * offset, in pixels from the start of the content, that the drag is jumping to (not an item index),
@@ -749,6 +761,9 @@ internal interface ScrollbarTarget {
     val firstVisibleItemScrollOffset: Int
 
     fun requestScrollToItem(index: Int, offset: Int)
+
+    /** True when the content's size is exact (a scroll state), not estimated (lazy layouts). */
+    val hasExactContentSize: Boolean get() = false
 }
 
 internal class ListScrollbarTarget(override val state: LazyListState) : ScrollbarTarget {
@@ -837,6 +852,7 @@ internal class ScrollStateScrollbarTarget(
     override val isVertical: Boolean,
     override val isReversed: Boolean,
 ) : ScrollbarTarget {
+    override val hasExactContentSize: Boolean get() = true
     override val totalItemsCount: Int
         get() = state.scrollIndicatorState?.contentSize ?: 0
     override val itemsPerLine: Int
@@ -974,11 +990,31 @@ internal class ThumbGeometry {
     }
 }
 
+/**
+ * [ThumbSizing.Automatic] turned into what it means for this scrollable and platform; any other
+ * sizing as it is. [hasExactContentSize] is true for scroll states, false for lazy layouts.
+ */
+internal fun ThumbSizing.resolvedFor(
+    hasExactContentSize: Boolean,
+    platform: Platform = currentPlatform,
+): ThumbSizing = when {
+    this != ThumbSizing.Automatic -> this
+    platform == Platform.Desktop -> AutomaticDesktopSizing
+    hasExactContentSize -> AutomaticExactSizing
+    else -> AutomaticEstimatedSizing
+}
+
+private val AutomaticDesktopSizing = ThumbSizing.Proportional(minLength = 24.dp)
+private val AutomaticExactSizing = ThumbSizing.Proportional()
+private val AutomaticEstimatedSizing = ThumbSizing.Fixed(40.dp)
+
 internal fun Density.resolveThumbLength(
     sizing: ThumbSizing,
     usableLength: Float,
     fraction: Float,
 ): Float = when (sizing) {
+    // Resolved before it gets here (ScrollbarConfig.thumbSizing). Falls back to the lazy-list look.
+    ThumbSizing.Automatic -> resolveThumbLength(AutomaticEstimatedSizing, usableLength, fraction)
     is ThumbSizing.Fixed -> sizing.length.toPx().coerceAtMost(usableLength)
     is ThumbSizing.Proportional -> {
         val minLength = sizing.minLength.toPx()
@@ -1754,6 +1790,8 @@ internal class ScrollbarConfig(
     val onEdgeChange: ((ScrollbarEdge) -> Unit)?,
     val gestureZones: GestureZoneOverlap = GestureZoneOverlap(),
     val systemBars: SystemBarOverlap = SystemBarOverlap(),
+    /** The style's sizing with [ThumbSizing.Automatic] resolved for this scrollable. */
+    val thumbSizing: ThumbSizing = style.thumbSizing.resolvedFor(hasExactContentSize = false),
 ) {
     /** Largest thumb progress. Below 1 while more items can still load. */
     val endCap: Float get() = if (hasMore) HAS_MORE_END_CAP else 1f
@@ -1971,8 +2009,8 @@ private fun Density.layoutThumbForInput(
         containerLength = containerLength,
         startPadding = config.mainAxisStartPaddingPx(this, isVertical),
         endPadding = config.mainAxisEndPaddingPx(this, isVertical),
-        sizing = style.thumbSizing,
-        fraction = controller.displayedFraction(target, style.thumbSizing, metrics.thumbFraction),
+        sizing = config.thumbSizing,
+        fraction = controller.displayedFraction(target, config.thumbSizing, metrics.thumbFraction),
         visualProgress = visualProgress(metrics.progress * config.endCap, config.isMirrored(target)),
         lengthOverride = iconMainAxisLength(style, isVertical),
     )
@@ -2021,6 +2059,7 @@ private fun Modifier.scrollbarFor(
         style, contentPadding, minItemsToShow, edge, layoutDirection, label, hasMore, onEdgeChange,
         gestureZones = controller.gestureZones,
         systemBars = controller.systemBars,
+        thumbSizing = style.thumbSizing.resolvedFor(target.hasExactContentSize),
     )
     val latestConfig by rememberUpdatedState(config)
 
@@ -2051,15 +2090,16 @@ private fun Modifier.scrollbarFor(
     }
 
     // Proportional sizing only: animates the estimated ratio so content-size jitter is hidden.
-    // A fixed thumb (the touch default) doesn't launch it, so it doesn't re-run on every scroll frame.
-    val sizingOption = style.thumbSizing
+    // A fixed thumb (the touch default on lazy lists) doesn't launch it, so it doesn't re-run on
+    // every scroll frame.
+    val sizingOption = config.thumbSizing
     val smoothingEnabled = sizingOption is ThumbSizing.Proportional && sizingOption.smoothed
     // Before the draw, so a thumb switched to smoothing later never shows a value from before.
     SideEffect { if (!smoothingEnabled) controller.smoothedTarget = null }
     LaunchedEffect(controller, target, smoothingEnabled) {
         if (!smoothingEnabled) return@LaunchedEffect
         snapshotFlow {
-            val sizing = latestConfig.style.thumbSizing
+            val sizing = latestConfig.thumbSizing
             val indicator = target.state.scrollIndicatorState
             when {
                 sizing !is ThumbSizing.Proportional || !sizing.smoothed || indicator == null -> null
@@ -2160,7 +2200,7 @@ private fun Modifier.scrollbarFor(
             val startPadding = currentConfig.mainAxisStartPaddingPx(this, isVertical)
             val trackLength = geometry.trackLength
             val shownFraction =
-                controller.displayedFraction(target, currentConfig.style.thumbSizing, metrics.thumbFraction)
+                controller.displayedFraction(target, currentConfig.thumbSizing, metrics.thumbFraction)
 
             // On the thumb, keep the finger's position inside it so it never jumps: a drag goes on
             // from where it was claimed, not from where the finger landed, so the list doesn't jump
@@ -2588,7 +2628,7 @@ private fun Modifier.scrollbarFor(
                     return@drawWithContent
                 }
 
-                fraction = controller.displayedFraction(target, style.thumbSizing, viewport / content)
+                fraction = controller.displayedFraction(target, config.thumbSizing, viewport / content)
                 // After release, glide from where the finger left to the real position.
                 // The glide offset hides jumps from item count changes.
                 progress = (
@@ -2606,7 +2646,7 @@ private fun Modifier.scrollbarFor(
                 containerLength = containerLength,
                 startPadding = config.mainAxisStartPaddingPx(this, isVertical),
                 endPadding = config.mainAxisEndPaddingPx(this, isVertical),
-                sizing = style.thumbSizing,
+                sizing = config.thumbSizing,
                 fraction = fraction,
                 visualProgress = visualProgress(progress, isMirrored),
                 lengthOverride = this.iconMainAxisLength(style, isVertical),

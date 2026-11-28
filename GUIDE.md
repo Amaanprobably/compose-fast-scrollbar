@@ -393,10 +393,11 @@ Use `Always` for long reading screens, settings and desktop apps, where people l
 
 ### Thumb length
 
-| Option                          | Behavior                                                                                   | Use it when                                                                       |
-|---------------------------------|--------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------|
-| `ThumbSizing.Fixed(40.dp)`      | Constant length. The default on touch screens, and it never jitters.                       | Touch screens, especially with uneven items.                                      |
-| `ThumbSizing.Proportional(...)` | Length follows viewport / content. The default on desktop, smoothed, with a 24 dp minimum. | Desktop, or same-size items where you want the length to hint at the list's size. |
+| Option                          | Behavior                                                                                                             | Use it when                                                                       |
+|---------------------------------|----------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------|
+| `ThumbSizing.Automatic`         | The default on touch screens: `Fixed(40.dp)` on lazy lists and grids, `Proportional` on scrollable Columns and Rows. | You want the platform default back after changing it.                             |
+| `ThumbSizing.Fixed(40.dp)`      | Constant length, and it never jitters.                                                                               | Touch screens, especially with uneven items.                                      |
+| `ThumbSizing.Proportional(...)` | Length follows viewport / content, smoothed. The default on desktop, with a 24 dp minimum.                           | Desktop, or same-size items where you want the length to hint at the list's size. |
 
 ```kotlin
 ScrollbarDefaults.style(
@@ -408,7 +409,7 @@ ScrollbarDefaults.style(
 )
 ```
 
-Lazy lists don't know their true content size, so a proportional thumb changes length as items of different sizes scroll in. `smoothed` hides most of that, but `Fixed` avoids it entirely.
+Lazy lists don't know their true content size, so a proportional thumb changes length as items of different sizes scroll in. `smoothed` hides most of that, but `Fixed` avoids it entirely. That's why `Automatic`, the default on touch screens, picks `Fixed` for lazy lists and `Proportional` for scrollable Columns and Rows, whose size is exact. A style of your own keeps `Automatic` unless you set `thumbSizing`.
 
 ---
 
@@ -549,18 +550,18 @@ https://github.com/user-attachments/assets/e29dc856-bf78-4d82-8a1c-1a4b3736a9f9
 
 By default, the scrollbar already follows each platform:
 
-| Value                   | Android                | iOS        | Desktop (and `compactStyle`)                  |
-|-------------------------|------------------------|------------|-----------------------------------------------|
-| Look                    | `Capsule`              | `Bar`      | `Bar`                                         |
-| `thumbThickness`        | 5 dp                   | 3 dp       | 8 dp                                          |
-| `pressedThumbThickness` | 8 dp                   | 8 dp       | 12 dp                                         |
-| Thumb length            | 40 dp                  | 40 dp      | Proportional, min 24 dp                       |
-| Visibility              | `AutoHide`             | `AutoHide` | `Always` (Windows, Linux), `AutoHide` (macOS) |
-| `touchTargetThickness`  | 48 dp                  | 48 dp      | 16 dp                                         |
-| `trackPadding`          | 2 dp                   | 3 dp       | 2 dp                                          |
-| `edgePadding`           | 4 dp                   | 3 dp       | 2 dp                                          |
-| `capsuleThickness`      | 24 dp                  | 24 dp      | 16 dp                                         |
-| `capsuleExtraLength`    | 16 dp                  | 16 dp      | 8 dp                                          |
+| Value                   | Android                        | iOS                            | Desktop (and `compactStyle`)                  |
+|-------------------------|--------------------------------|--------------------------------|-----------------------------------------------|
+| Look                    | `Capsule`                      | `Bar`                          | `Bar`                                         |
+| `thumbThickness`        | 5 dp                           | 3 dp                           | 8 dp                                          |
+| `pressedThumbThickness` | 8 dp                           | 8 dp                           | 12 dp                                         |
+| Thumb length            | 40 dp, proportional on Columns | 40 dp, proportional on Columns | Proportional, min 24 dp                       |
+| Visibility              | `AutoHide`                     | `AutoHide`                     | `Always` (Windows, Linux), `AutoHide` (macOS) |
+| `touchTargetThickness`  | 48 dp                          | 48 dp                          | 16 dp                                         |
+| `trackPadding`          | 2 dp                           | 3 dp                           | 2 dp                                          |
+| `edgePadding`           | 4 dp                           | 3 dp                           | 2 dp                                          |
+| `capsuleThickness`      | 24 dp                          | 24 dp                          | 16 dp                                         |
+| `capsuleExtraLength`    | 16 dp                          | 16 dp                          | 8 dp                                          |
 
 To give each platform its own style from shared code, without `expect`/`actual` or platform checks, use `platformStyle`. Each argument is a full style, so anything can differ. Pass only the platforms you want to change:
 
@@ -686,7 +687,7 @@ Column(
 
 **Put `scrollbar` before `verticalScroll`**, on the same element. Placed after it, the bar sits inside the scrolled content and scrolls away with it.
 
-A scroll state knows the full size of its content, so positions are exact, unlike the estimate lazy lists need.
+A scroll state knows the full size of its content, so positions are exact, unlike the estimate lazy lists need. For the same reason the thumb's length follows the visible part of the content, on touch screens too (`ThumbSizing.Automatic`, the default).
 
 ### Horizontal and reversed
 
@@ -780,7 +781,7 @@ All parameters of `style(...)` and `compactStyle(...)`. "Platform" means the val
 | Parameter               | Type                  | Default                | Description                                                                                                                                          |
 |-------------------------|-----------------------|------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `thumbAppearance`       | `ThumbAppearance`     | platform               | `Capsule`, `Bar` or `Icon(...)`.                                                                                                                     |
-| `thumbSizing`           | `ThumbSizing`         | platform               | `Fixed(length)` or `Proportional(...)`.                                                                                                              |
+| `thumbSizing`           | `ThumbSizing`         | platform               | `Automatic`, `Fixed(length)` or `Proportional(...)`.                                                                                                 |
 | `thumbThickness`        | `Dp`                  | platform               | Thumb width (height for horizontal bars) at rest.                                                                                                    |
 | `pressedThumbThickness` | `Dp`                  | platform               | Thumb width while held. The bar look widens to it, and halfway to it on mouse hover.                                                                 |
 | `touchTargetThickness`  | `Dp`                  | platform               | Width of the grab strip along the edge. Touches in it that miss the thumb still reach the list.                                                      |
@@ -809,10 +810,11 @@ All parameters of `style(...)` and `compactStyle(...)`. "Platform" means the val
 
 ### `ThumbSizing`
 
-| Option                                                                       | Description                                                                                                                                                                                           |
-|------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `Fixed(length = 40.dp)`                                                      | Constant length. The default on touch screens, and it never jitters.                                                                                                                                  |
-| `Proportional(minLength = 48.dp, maxLengthFraction = 0.9f, smoothed = true)` | Length follows viewport / content, between `minLength` and `maxLengthFraction` of the track. `smoothed` animates changes in the estimated content size. The desktop default uses `minLength = 24.dp`. |
+| Option                                                                       | Description                                                                                                                                                                                                                                      |
+|------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `Automatic`                                                                  | The default on touch screens. A fixed 40 dp thumb on lazy lists and grids, whose size is only estimated, and a smoothed `Proportional` one on scrollable Columns and Rows, whose size is exact. On desktop, `Proportional` with a 24 dp minimum. |
+| `Fixed(length = 40.dp)`                                                      | Constant length, and it never jitters.                                                                                                                                                                                                           |
+| `Proportional(minLength = 48.dp, maxLengthFraction = 0.9f, smoothed = true)` | Length follows viewport / content, between `minLength` and `maxLengthFraction` of the track. `smoothed` animates changes in the estimated content size. The desktop default uses `minLength = 24.dp`.                                            |
 
 ### `TrackAppearance`
 
@@ -876,7 +878,7 @@ Lazy lists only know the size of items they've measured, so dragging maps the th
 Fast scrolling pays off on lists at least 4 screens tall (roughly 50+ items), like Android's own fast scroller. On short lists with very uneven items, the estimate moves as items are measured. Raise `minItemsToShow` to hide the bar on lists like that.
 
 **A proportional thumb keeps changing length.**
-That's the estimated content size changing as items of different sizes scroll in. Keep `smoothed = true`, or use `ThumbSizing.Fixed` (the default on touch screens).
+That's the estimated content size changing as items of different sizes scroll in. Keep `smoothed = true`, or use `ThumbSizing.Fixed` (what `Automatic` picks for lazy lists on touch screens).
 
 **A collapsing toolbar doesn't react to fast scrolling.**
 Fast scrolling jumps the list straight to its target instead of scrolling through nested scroll, so `TopAppBar` scroll behaviors don't see it. Swiping the list still drives them as usual.

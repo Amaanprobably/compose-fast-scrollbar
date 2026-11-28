@@ -25,7 +25,7 @@ https://github.com/user-attachments/assets/8f0c4779-44e3-4107-b11b-78473a625502
 
 - **Drag to jump** anywhere in long lists. Taps on the thumb and touches that miss it still reach the list.
 - **One modifier** for `LazyColumn`, `LazyRow`, lazy grids and scrollable `Column`/`Row`. No wrapper composable.
-- **Steady thumb:** fixed length on touch screens, and it glides instead of jumping when items change.
+- **Steady thumb:** fixed length on lazy lists on touch screens, and it glides instead of jumping when items change.
 - **Label bubble** while dragging (a letter, date or section), with a haptic tick per section.
 - **Infinite feeds and chats:** `hasMore`, reversed lists, and pages that load mid-drag.
 - **Make it yours:** colors, sizes, your own icon as the thumb, and an optional visible track.

@@ -3,7 +3,10 @@
 All notable changes to this project are documented here. The project follows
 [semantic versioning](https://semver.org). While it's on 0.x, minor versions may include breaking changes.
 
-## 0.2.2
+## 0.2.2 (2026-11-28)
+
+### Changed
+- New `ThumbSizing.Automatic`, the default on touch screens: a fixed 40dp thumb on lazy lists and grids, like before, and a proportional one on scrollable Columns and Rows (`Modifier.scrollbar(scrollState)`), like Android's own ScrollView. A scroll state knows its exact content size, so that thumb never jitters. A style of your own gets it too unless it sets `thumbSizing`. `style().thumbSizing` is now `Automatic` on Android and iOS instead of `Fixed(40.dp)`; if you `when` over `ThumbSizing`, add a branch for it. Desktop is unchanged.
 
 ### Fixed
 - The bar stays clear of the system bars and display cutouts on every side when the list draws behind them, like it already did for the gesture zones. In landscape it no longer sits under a navigation bar at the side of the screen, and a horizontal bar is lifted above a 3-button navigation bar. Lists that are already padded clear of the bars don't change.
